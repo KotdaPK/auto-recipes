@@ -11,6 +11,7 @@ class TimeBlock(BaseModel):
 class IngredientItem(BaseModel):
     raw: Optional[str] = None
     name: str
+    description: Optional[str] = None
     quantity: Optional[float] = None
     unit: Optional[str] = ""
     notes: Optional[str] = ""

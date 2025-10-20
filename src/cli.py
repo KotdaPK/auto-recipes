@@ -52,19 +52,5 @@ def sync_meals(days: int = 10, duration: int = 45):
 
 if __name__ == "__main__":
     # validate required secrets (dotenv already loaded at module import)
-    try:
-        validate_required()
-        app()
-    except click.exceptions.UsageError as e:
-        console.print(f"[red]CLI usage error:[/red] {e}")
-        console.print(
-            "Correct example: [green]python -m src.cli ingest <URL>[/green] (e.g. python -m src.cli ingest https://example.com/recipe)"
-        )
-        sys.exit(2)
-    except SystemExit as e:
-        # Typer/Click often raises SystemExit on bad CLI usage; provide a friendly hint
-        if e.code != 0:
-            console.print(
-                "[red]Invalid CLI invocation.[/red] Correct example: [green]python -m src.cli ingest <URL>[/green]"
-            )
-        raise
+    validate_required()
+    app()

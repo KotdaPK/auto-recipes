@@ -31,6 +31,7 @@ class Settings:
 
     # Notion property names (defaults chosen to common names)
     P_RECIPE_TITLE: str = _get("P_RECIPE_TITLE", "Name")
+    P_RECIPE_SOURCE_URL: str = _get("P_RECIPE_SOURCE_URL", "Source")
     P_MEAL_WHEN: str = _get("P_MEAL_WHEN", "When")
     P_MEAL_TYPE: str = _get("P_MEAL_TYPE", "Meal Type")
     P_MEAL_PLANNED_SERVINGS: str = _get("P_MEAL_PLANNED_SERVINGS", "Planned Servings")

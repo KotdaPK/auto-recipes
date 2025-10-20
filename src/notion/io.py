@@ -79,19 +79,31 @@ def upsert_recipe(title: str, source_url: Optional[str] = None) -> Tuple[str, bo
     db = settings.RECIPES_DB_ID
     if not db:
         raise RuntimeError("RECIPES_DB_ID not configured")
-    # search by title and source_url
+
+    # Fetch database schema once to know available properties
+    try:
+        db_meta = client.databases.retrieve(database_id=db)
+        db_props = db_meta.get("properties", {}) or {}
+    except Exception:
+        db_props = {}
+
+    # Determine property keys
     title_key = settings.P_RECIPE_TITLE
-    filter_body = {
-        "and": [{"property": title_key, "title": {"equals": title}}]
-    }
-    if source_url:
-        filter_body["and"].append({"property": "Source", "url": {"equals": source_url}})
-    resp = client.databases.query(database_id=db, filter=filter_body)
+    source_key = settings.P_RECIPE_SOURCE_URL
+    has_source = source_key in db_props and db_props[source_key].get("type") == "url"
+
+    # Build filter: always include title match; include source URL only if property exists
+    filter_clauses = [{"property": title_key, "title": {"equals": title}}]
+    if source_url and has_source:
+        filter_clauses.append({"property": source_key, "url": {"equals": source_url}})
+    resp = client.databases.query(database_id=db, filter={"and": filter_clauses})
     if resp.get("results"):
         return resp["results"][0]["id"], False
-    props = {settings.P_RECIPE_TITLE: {"title": [{"text": {"content": title}}]}}
-    if source_url:
-        props["Source"] = {"url": source_url}
+
+    # Prepare properties for creation
+    props = {title_key: {"title": [{"text": {"content": title}}]}}
+    if source_url and has_source:
+        props[source_key] = {"url": source_url}
     page = client.pages.create(parent={"database_id": db}, properties=props)
     return page.get("id"), True
 

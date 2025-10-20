@@ -1,93 +1,108 @@
 """
-Call Gemini 2.5 Flash to parse recipe text into RecipePayload using structured JSON output.
-
-This version uses the modern google-generativeai API (>= 0.8.5) with the
-`GenerativeModel(...).generate_content()` call and a `response_schema`
-for guaranteed JSON compliance.
+Gemini 2.5 Flash recipe parser with flattened response schema.
 """
 
 from __future__ import annotations
-
 import json
 from typing import Optional
 from pydantic import ValidationError
-
 import google.generativeai as genai
 from src.models.recipe_schema import RecipePayload
 from src.settings import settings
 
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
 
-# ---------------------------------------------------------------------------
-# Prompt builder
-# ---------------------------------------------------------------------------
-
 def _build_prompt(text: str, url: Optional[str]) -> str:
-    """Assemble the instruction + source + text into one clean prompt."""
-    instruction = (
-        "Extract exactly ONE cooking recipe from PAGE_TEXT into the provided JSON schema.\n"
-        "- Normalize ingredient names to common grocery terms (no brands).\n"
-        "- Parse quantities/units if present; leave null if not determinable.\n"
-        "- Keep steps as concise imperative sentences.\n"
-        "- Do NOT invent data not in PAGE_TEXT.\n"
-    )
-    parts = [instruction, f"SOURCE_URL: {url or ''}", "PAGE_TEXT:", text[:120000]]
-    return "\n\n".join(parts)
+    return "\n\n".join([
+        "Extract exactly ONE cooking recipe from PAGE_TEXT into the provided JSON schema.",
+        "- Normalize ingredient names to common grocery terms (no brands).",
+        "- Parse quantities/units if present; leave null if not determinable.",
+        "- Keep steps as concise imperative sentences.",
+        "- Do NOT invent data not in PAGE_TEXT.",
+        f"SOURCE_URL: {url or ''}",
+        "PAGE_TEXT:",
+        text[:120000],
+    ])
 
 
-# ---------------------------------------------------------------------------
-# Main parse function
-# ---------------------------------------------------------------------------
+# --- define a flat response schema (no $defs/$ref) -----------------
+RECIPE_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "source_url": {"type": "string"},
+        "yield_text": {"type": "string"},
+        "servings": {"type": "number"},
+        "time": {
+            "type": "object",
+            "properties": {
+                "prep_min": {"type": "number"},
+                "cook_min": {"type": "number"},
+                "total_min": {"type": "number"},
+            },
+        },
+        "ingredients": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "raw": {"type": "string"},
+                    "name": {"type": "string"},
+                    "quantity": {"type": "number"},
+                    "unit": {"type": "string"},
+                    "notes": {"type": "string"},
+                },
+                "required": ["name"],
+            },
+        },
+        "steps": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["title", "ingredients", "steps"],
+}
+
 
 def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
-    """
-    Use Gemini 2.5 Flash to parse raw recipe text into a validated RecipePayload.
-    Retries once on validation failure, otherwise raises ValueError.
-    """
+    """Parse text using Gemini 2.5 Flash structured output."""
     if not settings.GEMINI_API_KEY:
-        raise RuntimeError("Gemini API key not configured (GEMINI_API_KEY).")
+        raise RuntimeError("GEMINI_API_KEY not configured.")
 
     prompt = _build_prompt(text, url)
-
-    # Use the Pydantic schema to derive a response schema for Gemini
-    response_schema = RecipePayload.model_json_schema()
-
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
+        "gemini-2.5-flash",
         generation_config={
             "temperature": 0,
             "response_mime_type": "application/json",
-            "response_schema": response_schema,
+            "response_schema": RECIPE_RESPONSE_SCHEMA,
         },
     )
 
     for attempt in range(2):
-        response = model.generate_content([prompt])
+        resp = model.generate_content([prompt])
+        data = getattr(resp, "parsed", None)
 
-        # Gemini structured output returns parsed JSON directly at .parsed
-        data = None
-        if hasattr(response, "parsed") and response.parsed is not None:
-            data = response.parsed
-        else:
-            # Fallback: try to parse raw text
+        if data is None:
+            # fallback: manual JSON parse
+            raw = getattr(resp, "text", None) or getattr(resp, "output_text", None)
+            if not raw:
+                raise ValueError("No content from Gemini response.")
             try:
-                raw = response.text or response.candidates[0].content.parts[0].text
                 data = json.loads(raw)
             except Exception as e:
-                raise ValueError("Could not extract JSON from Gemini response") from e
+                # strip junk outside braces
+                start, end = raw.find("{"), raw.rfind("}")
+                if start != -1 and end != -1:
+                    data = json.loads(raw[start:end + 1])
+                else:
+                    raise ValueError("Failed to parse JSON.") from e
 
         try:
             recipe = RecipePayload.model_validate(data)
             if url and not recipe.source_url:
                 recipe.source_url = url
+            print("Parsed recipe:", recipe.model_dump_json(indent=2))
             return recipe
         except ValidationError as e:
             if attempt == 0:
                 continue
-            raise ValueError(f"Gemini output failed validation: {e}") from e
+            raise ValueError(f"Gemini output failed validation: {e}")

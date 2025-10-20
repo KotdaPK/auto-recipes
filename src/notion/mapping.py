@@ -6,7 +6,7 @@ from typing import Dict
 
 from src.models.recipe_schema import RecipePayload
 from src.notion import io as notion_io
-from src.dedup.canonicalize import canonicalize
+from src.dedup.canonicalize import canonicalize, extract_description_and_name
 
 
 def map_and_upsert(recipe: RecipePayload, index, threshold: float = 0.92) -> Dict:
@@ -27,7 +27,9 @@ def map_and_upsert(recipe: RecipePayload, index, threshold: float = 0.92) -> Dic
 
     for ing in recipe.ingredients:
         raw = ing.raw or ing.name
-        can = canonicalize(raw)
+        # attempt to extract a short description (descriptors) and a cleaned name
+        description, cleaned = extract_description_and_name(raw)
+        can = cleaned or canonicalize(raw)
         status, name, score = index.match_or_create
         # Use provided matcher function: to support both our match_or_create wrapper and index.nearest
         try:
@@ -53,7 +55,13 @@ def map_and_upsert(recipe: RecipePayload, index, threshold: float = 0.92) -> Dic
             existing[name] = page_id
 
         summary["ingredients"].append(
-            {"name": name, "page_id": page_id, "created": created_flag, "score": score}
+            {
+                "name": name,
+                "page_id": page_id,
+                "created": created_flag,
+                "score": score,
+                "description": description,
+            }
         )
 
         # junction
