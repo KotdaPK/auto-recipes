@@ -7,6 +7,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+import json
+from pathlib import Path
+
+# Load the JSON schema from file so it can be edited without touching code.
+_schema_path = Path(__file__).parent / "schemas" / "recipe_response_schema.json"
+if _schema_path.exists():
+    with open(_schema_path, "r", encoding="utf8") as _fh:
+        RECIPE_RESPONSE_SCHEMA = json.load(_fh)
+else:
+    RECIPE_RESPONSE_SCHEMA = {}
 
 
 def _get(name: str, default: str | None = None) -> str | None:
@@ -45,9 +55,14 @@ class Settings:
     # Google Calendar
     GCAL_CALENDAR_ID: str = _get("GCAL_CALENDAR_ID", "primary")
     LOCAL_TZ: str = _get("LOCAL_TZ", "UTC")
+    # Optional ingredient properties in the Ingredients DB
+    P_ING_UNIT: str = _get("P_ING_UNIT", "Unit")
+    P_ING_NOTES: str = _get("P_ING_NOTES", "Notes")
 
 
 settings = Settings()
+
+# RECIPE_RESPONSE_SCHEMA is loaded above and exposed from this module.
 
 
 def validate_required() -> None:
@@ -67,4 +82,3 @@ def validate_required() -> None:
             + "\nPlease set them in your .env or environment and try again."
         )
         raise RuntimeError(msg)
-    

@@ -45,6 +45,7 @@ def url_to_notion(url: str) -> None:
 
     summary = notion_mapping.map_and_upsert(recipe, wrapper)
     console.print("Done:", summary)
+    console.print("Recipe parsed:", recipe.model_dump_json(indent=2))
 
 
 def reindex_ingredients(path_base: str = "data/ingredients") -> None:

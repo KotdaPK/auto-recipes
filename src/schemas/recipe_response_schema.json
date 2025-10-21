@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "properties": {
+    "title": { "type": "string" },
+    "source_url": { "type": "string" },
+    "yield_text": { "type": "string" },
+    "servings": { "type": "number" },
+    "time": {
+      "type": "object",
+      "properties": {
+        "prep_min": { "type": "number" },
+        "cook_min": { "type": "number" },
+        "total_min": { "type": "number" }
+      }
+    },
+    "ingredients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "raw": { "type": "string" },
+          "name": { "type": "string" },
+          "quantity": { "type": "number" },
+          "unit": { "type": "string" },
+          "notes": { "type": "string" }
+        },
+        "required": ["name"]
+      }
+    },
+    "steps": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["title", "ingredients", "steps"]
+}

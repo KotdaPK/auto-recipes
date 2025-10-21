@@ -45,7 +45,7 @@ def list_ingredients() -> Dict[str, str]:
         props = page.get("properties", {})
         # assume title property is first title
         title_key = settings.P_RECIPE_TITLE
-        title_prop = props.get("Name") or props.get(title_key)
+        title_prop = props.get(title_key) or props.get("Name")
         name = ""
         if title_prop and title_prop.get("title"):
             name = "".join([t.get("plain_text", "") for t in title_prop.get("title")])
@@ -54,23 +54,50 @@ def list_ingredients() -> Dict[str, str]:
     return mapping
 
 
-def upsert_ingredient(name: str) -> Tuple[str, bool]:
-    """Upsert ingredient by name; returns (page_id, created_flag)."""
+def upsert_ingredient(name: str, unit: Optional[str] = None, notes: Optional[str] = None) -> Tuple[str, bool]:
+    """Upsert ingredient by name; returns (page_id, created_flag).
+
+    If the Ingredients DB contains properties for unit/notes (names configured
+    via `settings.P_ING_UNIT` and `settings.P_ING_NOTES`), set them when
+    creating the page.
+    """
     client = get_client()
     db = settings.INGREDIENTS_DB_ID
     if not db:
         raise RuntimeError("INGREDIENTS_DB_ID not configured")
-    # naive search by filter
+
+    # Fetch DB schema to determine which properties exist
+    try:
+        db_meta = client.databases.retrieve(database_id=db)
+        db_props = db_meta.get("properties", {}) or {}
+    except Exception:
+        db_props = {}
+
+    title_key = settings.P_RECIPE_TITLE
+    # naive search by filter using title property key
+    filter_key = title_key if title_key in db_props else "Name"
     resp = client.databases.query(
-        database_id=db, filter={"property": "Name", "title": {"equals": name}}
+        database_id=db, filter={"property": filter_key, "title": {"equals": name}}
     )
     if resp.get("results"):
         return resp["results"][0]["id"], False
-    # create
-    page = client.pages.create(
-        parent={"database_id": db},
-        properties={"Name": {"title": [{"text": {"content": name}}]}},
-    )
+
+    # Prepare properties for creation, include optional unit/notes only if DB has them
+    props = {filter_key: {"title": [{"text": {"content": name}}]}}
+    # Unit
+    unit_key = settings.P_ING_UNIT
+    if unit and unit_key in db_props and db_props[unit_key].get("type") == "rich_text":
+        props[unit_key] = {"rich_text": [{"text": {"content": unit}}]}
+    # Notes
+    notes_key = settings.P_ING_NOTES
+    if notes and notes_key in db_props and db_props[notes_key].get("type") in ("rich_text", "title"):
+        # Use rich_text for notes; fallback to title if configured that way
+        if db_props[notes_key].get("type") == "title":
+            props[notes_key] = {"title": [{"text": {"content": notes}}]}
+        else:
+            props[notes_key] = {"rich_text": [{"text": {"content": notes}}]}
+
+    page = client.pages.create(parent={"database_id": db}, properties=props)
     return page.get("id"), True
 
 
@@ -116,11 +143,39 @@ def upsert_recipe_ingredient(
     db = settings.RECIPE_ING_DB_ID
     if not db:
         raise RuntimeError("RECIPE_ING_DB_ID not configured")
+    # Fetch DB schema so we can adapt to custom property names
+    try:
+        db_meta = client.databases.retrieve(database_id=db)
+        db_props = db_meta.get("properties", {}) or {}
+    except Exception:
+        db_props = {}
+
+    # Find relation properties in the junction DB
+    relation_keys = [k for k, v in db_props.items() if v.get("type") == "relation"]
+
+    # Prefer explicit property names if they exist, otherwise pick relation props
+    recipe_key = "Recipe" if "Recipe" in db_props else (relation_keys[0] if relation_keys else None)
+    ingredient_key = (
+        "Ingredient"
+        if "Ingredient" in db_props
+        else (relation_keys[1] if len(relation_keys) > 1 else (relation_keys[0] if relation_keys else None))
+    )
+
+    if not recipe_key or not ingredient_key:
+        available = ", ".join(sorted(db_props.keys())) or "<none>"
+        raise RuntimeError(
+            f"Junction DB missing relation properties. Expected 'Recipe' and 'Ingredient' or at least two relation properties. Available properties: {available}"
+        )
+
     props = {
-        "Recipe": {"relation": [{"id": recipe_page_id}]},
-        "Ingredient": {"relation": [{"id": ingredient_page_id}]},
+        recipe_key: {"relation": [{"id": recipe_page_id}]},
+        ingredient_key: {"relation": [{"id": ingredient_page_id}]},
     }
-    if qty_per_serving is not None:
-        props[settings.P_RECIPING_QTY_PER_SERVING] = {"number": qty_per_serving}
+
+    # Only set the qty property if it exists and is a number
+    qty_key = settings.P_RECIPING_QTY_PER_SERVING
+    if qty_per_serving is not None and qty_key in db_props and db_props[qty_key].get("type") == "number":
+        props[qty_key] = {"number": qty_per_serving}
+
     page = client.pages.create(parent={"database_id": db}, properties=props)
     return page.get("id")
