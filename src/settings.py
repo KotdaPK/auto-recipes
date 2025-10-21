@@ -59,6 +59,12 @@ class Settings:
     P_ING_UNIT: str = _get("P_ING_UNIT", "Unit")
     P_ING_NOTES: str = _get("P_ING_NOTES", "Notes")
 
+    # Logging configuration
+    # LOG_LEVEL can be DEBUG, INFO, WARNING, ERROR, or CRITICAL
+    LOG_LEVEL: str = _get("LOG_LEVEL", "INFO")
+    # Optional path to write logs to a file; if unset, logs go to stderr
+    LOG_FILE: str | None = _get("LOG_FILE", None)
+
 
 settings = Settings()
 

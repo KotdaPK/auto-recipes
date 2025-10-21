@@ -7,6 +7,9 @@ from typing import Dict
 from src.models.recipe_schema import RecipePayload
 from src.notion import io as notion_io
 from src.dedup.canonicalize import canonicalize, extract_description_and_name
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def map_and_upsert(recipe: RecipePayload, index, threshold: float = 0.92) -> Dict:
@@ -26,69 +29,51 @@ def map_and_upsert(recipe: RecipePayload, index, threshold: float = 0.92) -> Dic
     existing_names = set(existing.keys())
 
     for ing in recipe.ingredients:
-        # Prefer the parsed 'name' field from the LLM; fall back to raw if missing
-        parsed_name = getattr(ing, "name", None) or ""
-        raw = getattr(ing, "raw", None) or parsed_name
-
-        # Clean the parsed name first; if it yields nothing, fall back to cleaning the raw text
-        _, cleaned = extract_description_and_name(parsed_name)
-        if not cleaned:
-            _, cleaned = extract_description_and_name(raw)
-        can = cleaned or canonicalize(parsed_name or raw)
-
-        # Use the parsed name as the primary input to the matcher so the resulting
-        # mapped name follows the LLM's 'name' when possible.
+        # Use the JSON fields directly. Do not canonicalize or extract.
+        # Build match input inline (prefer parsed name, fall back to raw)
+        match_input = getattr(ing, "name", None) or getattr(ing, "raw", None) or ""
         try:
-            status, name, score = index.match_or_create(
-                parsed_name or raw, existing_names, index, threshold
-            )
+            status, matched_name, score = index.match_or_create(match_input, existing_names, index, threshold)
+            logger.debug("match_or_create result for '%s': %s (score=%s)", match_input, status, score)
         except Exception:
-            # fallback: if name canonical in existing
-            if can in existing_names:
-                status, name, score = "existing", can, 1.0
-            else:
-                status, name, score = "new", can, 0.0
+            # best-effort fallback: treat as new
+            status, matched_name, score = "new", match_input, 0.0
 
         if status == "existing":
-            page_id = existing.get(name)
+            page_id = existing.get(matched_name)
             created_flag = False
             if not page_id:
-                # create and update mapping
-                page_id, created_flag = notion_io.upsert_ingredient(name)
-                existing[name] = page_id
+                page_id, created_flag = notion_io.upsert_ingredient(matched_name)
+                existing[matched_name] = page_id
         else:
-            page_id, created_flag = notion_io.upsert_ingredient(name)
-            existing[name] = page_id
+            # create ingredient page, include raw/quantity/unit/notes by passing fields directly
+            page_id, created_flag = notion_io.upsert_ingredient(
+                matched_name or match_input,
+                raw=getattr(ing, "raw", None),
+                quantity=getattr(ing, "quantity", None),
+                unit=getattr(ing, "unit", None),
+                notes=getattr(ing, "notes", None),
+            )
+            existing[matched_name or match_input] = page_id
 
-        summary["ingredients"].append(
-            {
-                "name": name,
-                "page_id": page_id,
-                "created": created_flag,
-                "score": score,
-            }
-        )
+        logger.info("ingredient mapped: %s -> %s (created=%s, score=%s)", matched_name or match_input, page_id, created_flag, score)
 
-        # junction
-        qty = ing.quantity
-        # Pass unit/notes when creating the ingredient page so Notion properties
-        # can be populated if the DB exposes them.
-        unit = getattr(ing, "unit", None)
-        notes = getattr(ing, "notes", None)
-        # If ingredient page didn't yet exist (we created it above), ensure we set unit/notes
-        # by calling upsert_ingredient with those fields (implementations may ignore unknown props).
-        if created_flag:
-            # created above with name; recreate or update is out of scope for simple upsert
-            pass
-        else:
-            # ensure ingredient exists and set optional fields if needed
-            try:
-                notion_io.upsert_ingredient(name, unit=unit, notes=notes)
-            except Exception:
-                # best-effort: continue even if updating optional fields fails
-                pass
+        # Put all ingredient properties directly into the summary without aliasing
+        try:
+            ing_dict = ing.model_dump()
+        except Exception:
+            # fallback for plain dict-like objects
+            ing_dict = dict(ing)
 
-        j_page = notion_io.upsert_recipe_ingredient(recipe_page_id, page_id, qty)
-        summary["junctions"].append({"page_id": j_page, "ingredient": name})
+        ing_dict.update({"page_id": page_id, "created": created_flag, "score": score})
+        summary["ingredients"].append(ing_dict)
+
+        # create junction row for this ingredient
+        try:
+            j_page = notion_io.upsert_recipe_ingredient(recipe_page_id, page_id, getattr(ing, "quantity", None))
+            logger.info("junction created: %s linking recipe %s to ingredient %s", j_page, recipe_page_id, page_id)
+            summary["junctions"].append({"page_id": j_page, "ingredient": matched_name or match_input})
+        except Exception:
+            logger.exception("Failed to create junction for recipe %s and ingredient %s", recipe_page_id, page_id)
 
     return summary

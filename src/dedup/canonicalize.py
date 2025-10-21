@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import re
 from typing import Dict
+import logging
+
+logger = logging.getLogger(__name__)
 
 ALIAS_MAP: Dict[str, str] = {
     "spring onions": "green onion",
@@ -38,6 +41,7 @@ def canonicalize(name: str) -> str:
     if not name:
         return ""
     s = name.lower()
+    logger.debug("canonicalize: initial lower '%s'", s)
     # replace hyphens with spaces
     s = s.replace("-", " ")
     # remove punctuation
@@ -45,11 +49,13 @@ def canonicalize(name: str) -> str:
     # remove descriptors words
     for d in DESCRIPTORS:
         s = re.sub(r"\b" + re.escape(d) + r"\b", "", s)
+    logger.debug("canonicalize: after removing descriptors '%s'", s)
     # collapse whitespace
     s = re.sub(r"\s+", " ", s).strip()
     # alias map
     if s in ALIAS_MAP:
         s = ALIAS_MAP[s]
+    logger.debug("canonicalize: final canonical '%s'", s)
     return s
 
 

@@ -9,6 +9,9 @@ from typing import List, Tuple
 import numpy as np
 
 from sentence_transformers import SentenceTransformer
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EmbedIndex:
@@ -30,6 +33,7 @@ class EmbedIndex:
         norms = np.linalg.norm(raw, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
         self.vecs = raw / norms
+        logger.info("EmbedIndex built for %d names using model %s", len(self.names), self.model_name)
 
     def save(self, path_base: str) -> None:
         os.makedirs(os.path.dirname(path_base), exist_ok=True)
@@ -39,6 +43,7 @@ class EmbedIndex:
             json.dump(self.names, fh, ensure_ascii=False)
         if self.vecs is not None:
             np.save(vecs_path, self.vecs)
+        logger.info("EmbedIndex saved to %s (names %s, vecs %s)", names_path, names_path, vecs_path)
 
     def load(self, path_base: str) -> None:
         names_path = f"{path_base}.names.json"
@@ -46,6 +51,7 @@ class EmbedIndex:
         with open(names_path, "r", encoding="utf8") as fh:
             self.names = json.load(fh)
         self.vecs = np.load(vecs_path)
+        logger.info("EmbedIndex loaded from %s", path_base)
 
     def nearest(self, query: str, topk: int = 1) -> Tuple[str, float]:
         """Return (name, score) for nearest neighbor using dot on normalized vectors.
@@ -53,6 +59,7 @@ class EmbedIndex:
         Score is cosine similarity in [-1,1]. If empty index, return ('', 0.0).
         """
         if not self.names or self.vecs is None or self.vecs.size == 0:
+            logger.debug("EmbedIndex empty when querying nearest for '%s'", query)
             return "", 0.0
         qvec = self.model.encode([query], convert_to_numpy=True)
         # ensure qvec is 1D
@@ -65,4 +72,5 @@ class EmbedIndex:
         # compute dot product between (N,d) and (d,)
         scores = self.vecs @ qvec
         idx = int(np.argmax(scores))
+        logger.debug("EmbedIndex nearest for '%s' -> %s (score=%s)", query, self.names[idx], float(scores[idx]))
         return self.names[idx], float(scores[idx])

@@ -12,6 +12,20 @@ from dotenv import load_dotenv
 # pick up values from the .env file
 load_dotenv()
 
+# Configure top-level logging early so other modules pick it up.
+import logging
+from src.settings import settings
+
+log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
+handlers = [logging.StreamHandler()]
+if settings.LOG_FILE:
+    handlers.append(logging.FileHandler(settings.LOG_FILE))
+logging.basicConfig(
+    level=log_level,
+    format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
+    handlers=handlers,
+)
+
 from src.orchestrate import run as orchestrator
 from src.settings import validate_required
 

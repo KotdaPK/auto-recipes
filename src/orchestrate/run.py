@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
-
+import json
+import logging
 from rich.console import Console
+logger = logging.getLogger(__name__)
 
 from src.ingest.fetch import fetch_url
 from src.ingest.extract_text import extract_main_text
@@ -17,6 +19,7 @@ console = Console()
 
 
 def url_to_notion(url: str) -> None:
+    logger.info("Ingesting: %s", url)
     console.print(f"Ingesting: {url}")
     html, final = fetch_url(url)
     text = extract_main_text(html, final)
@@ -44,21 +47,19 @@ def url_to_notion(url: str) -> None:
     wrapper = _Idx(index)
 
     summary = notion_mapping.map_and_upsert(recipe, wrapper)
-    console.print("Done:", summary)
-    console.print("Recipe parsed:", recipe.model_dump_json(indent=2))
+    logger.info("Ingest summary: %s", json.dumps(summary, indent=2))
+    logger.info("Recipe parsed: %s", recipe.model_dump_json(indent=2))
 
 
 def reindex_ingredients(path_base: str = "data/ingredients") -> None:
-    console.print("Reindexing ingredients from Notion...")
+    logger.info("Reindexing ingredients from Notion...")
     existing = notion_io.list_ingredients()
     names = list(existing.keys())
-    print("Ingredient names:", names)
-    print(f"Found {len(names)} ingredients to index.")
     idx = EmbedIndex()
     idx.build(names)
     os.makedirs(os.path.dirname(path_base), exist_ok=True)
     idx.save(path_base)
-    console.print(f"Wrote index for {len(names)} ingredients to {path_base}.*")
+    logger.info("Wrote index for %d ingredients to %s.*", len(names), path_base)
 
 
 def sync_meals(days_ahead: int = 10, default_duration: int = 45) -> None:
