@@ -218,10 +218,9 @@ def upsert_recipe(recipe) -> Tuple[str, bool]:
         cook_key = "Cook Time"
         if getattr(recipe, "time", None) and getattr(recipe.time, "cook_min", None) is not None and cook_key in db_props and db_props[cook_key].get("type") == "number":
             update_props[cook_key] = {"number": getattr(recipe.time, "cook_min")}
-        steps_key = "Steps"
-        if getattr(recipe, "steps", None) and steps_key in db_props and db_props[steps_key].get("type") == "rich_text":
-            steps_text = "\n".join(getattr(recipe, "steps", []))
-            update_props[steps_key] = {"rich_text": [{"text": {"content": steps_text}}]}
+        # Instead of storing steps in a property, store them as page child blocks
+        # We'll append a heading and numbered list items for steps when present.
+        steps = getattr(recipe, "steps", None)
 
         if update_props:
             try:
@@ -229,6 +228,27 @@ def upsert_recipe(recipe) -> Tuple[str, bool]:
                 logger.info("upsert_recipe: updated recipe page %s", page_id)
             except Exception:
                 logger.exception("upsert_recipe: failed to update recipe %s", page_id)
+
+        # Append steps as page children (heading + numbered list items) when provided
+        if steps:
+            try:
+                children: list = []
+                # heading
+                children.append({
+                    "object": "block",
+                    "type": "heading_2",
+                    "heading_2": {"rich_text": [{"type": "text", "text": {"content": "Steps"}}]},
+                })
+                for s in steps:
+                    children.append({
+                        "object": "block",
+                        "type": "numbered_list_item",
+                        "numbered_list_item": {"rich_text": [{"type": "text", "text": {"content": str(s)}}]},
+                    })
+                client.blocks.children.append(block_id=page_id, children=children)
+                logger.info("upsert_recipe: appended %d step blocks to recipe %s", len(steps), page_id)
+            except Exception:
+                logger.exception("upsert_recipe: failed to append step blocks to %s", page_id)
 
         return page_id, False
 
@@ -246,12 +266,33 @@ def upsert_recipe(recipe) -> Tuple[str, bool]:
             props["Prep Time"] = {"number": getattr(recipe.time, "prep_min")}
         if getattr(recipe.time, "cook_min", None) is not None and "Cook Time" in db_props and db_props["Cook Time"].get("type") == "number":
             props["Cook Time"] = {"number": getattr(recipe.time, "cook_min")}
-    # Steps
-    if getattr(recipe, "steps", None) and "Steps" in db_props and db_props["Steps"].get("type") == "rich_text":
-        props["Steps"] = {"rich_text": [{"text": {"content": "\n".join(getattr(recipe, "steps", []))}}]}
+    # Create page; we include children blocks for steps so the content shows up
+    children: list = []
+    steps = getattr(recipe, "steps", None)
+    if steps:
+        # heading
+        children.append({
+            "object": "block",
+            "type": "heading_2",
+            "heading_2": {"rich_text": [{"type": "text", "text": {"content": "Steps"}}]},
+        })
+        for s in steps:
+            children.append({
+                "object": "block",
+                "type": "numbered_list_item",
+                "numbered_list_item": {"rich_text": [{"type": "text", "text": {"content": str(s)}}]},
+            })
 
-    page = client.pages.create(parent={"database_id": db}, properties=props)
-    logger.info("upsert_recipe: created recipe page %s for %s", page.get("id"), title)
+    try:
+        if children:
+            page = client.pages.create(parent={"database_id": db}, properties=props, children=children)
+        else:
+            page = client.pages.create(parent={"database_id": db}, properties=props)
+        logger.info("upsert_recipe: created recipe page %s for %s", page.get("id"), title)
+    except Exception:
+        logger.exception("upsert_recipe: failed to create recipe page for %s", title)
+        raise
+
     return page.get("id"), True
 
 
