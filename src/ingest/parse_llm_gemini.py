@@ -21,23 +21,28 @@ except Exception:
 
 
 def _build_prompt(text: str, url: Optional[str]) -> str:
+    # Strongly require 'notes' to be filled where any preparation, parenthetical, or alternative text exists.
+    # If none apply, explicitly set notes to an empty string "" in the JSON output.
     return "\n\n".join([
         "Extract exactly ONE cooking recipe from PAGE_TEXT into the provided JSON schema.",
         "- Normalize ingredient names to common grocery terms (no brands).",
         "- Number the steps in order starting from 1.",
         "- Parse quantities/units if present; leave null if not determinable.",
-        "- Note ingredient information such as preparation methods and descriptors like 'roughly chopped', 'drained', 'minced', 'ground', 'finely grated', 'or other flour', or '(or chicken broth)'.",
-        " - But, if the descriptor is important for identifying the ingredient, include it in the name; such as 'unsalted butter'. Ingredients should be in the form of a grocery to be bought from a store. Do not omit important descriptors that affect the ingredient identity. Do not repeat ingredients even if they are alternatives. Mention alternatives in the notes field of the ingredient if possible.",
-        "- Use abbreviations where appropriate. Such as 'tbsp' for tablespoon, 'tsp' for teaspoon, 'oz' for ounce, 'lb' for pound, 'g' for gram, 'kg' for kilogram, 'ml' for milliliter, and 'l' for liter.",
-        "- Keep steps as concise imperative sentences.",
-        "- Do NOT invent data not in PAGE_TEXT. But, if servings are not specified, guess.",
+        "- For each ingredient, ALWAYS include a 'notes' string. Put preparation methods, descriptors, parenthetical alternatives, and optional swaps into 'notes' (e.g., 'drained', 'minced', 'roughly chopped', 'or chicken broth').",
+        "- If a descriptor changes the ingredient identity (e.g., 'unsalted butter'), include that descriptor in the 'name' instead of notes.",
+        "- If no notes apply, set notes to an empty string: \"\".",
+        "- Do NOT invent data not present in PAGE_TEXT; copy descriptors/alternatives verbatim into notes where present.",
+        "- Use standard abbreviations: tbsp, tsp, oz, lb, g, kg, ml, l.",
+        "- Keep steps short imperative sentences.",
+        "Example ingredient JSON entries (illustrative, non-exhaustive):",
+        '[{"raw":"1/2 cup dry white wine (or chicken broth)", "name":"dry white wine", "quantity":0.5, "unit":"cup", "notes":"or chicken broth"}]',
         f"SOURCE_URL: {url or ''}",
         "PAGE_TEXT:",
         text[:120000],
     ])
 
 def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
-    """Parse text using Gemini 2.5 Flash structured output."""
+    """Parse text using Gemini 2.5 structured output."""
     if not settings.GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY not configured.")
 
@@ -53,7 +58,7 @@ def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
 
     prompt = _build_prompt(text, url)
     model = genai.GenerativeModel(
-        "gemini-2.5-pro",
+        "gemini-2.5-flash",
         generation_config={
             "temperature": 0,
             "response_mime_type": "application/json",
@@ -100,5 +105,6 @@ def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
         except ValidationError as e:
             logger.warning("Pydantic validation failed for Gemini output: %s", e)
             if attempt == 0:
+                logger.info("Retrying Gemini parsing once more due to validation error.")
                 continue
             raise ValueError(f"Gemini output failed validation: {e}")
