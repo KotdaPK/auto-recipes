@@ -24,11 +24,13 @@ def _build_prompt(text: str, url: Optional[str]) -> str:
     return "\n\n".join([
         "Extract exactly ONE cooking recipe from PAGE_TEXT into the provided JSON schema.",
         "- Normalize ingredient names to common grocery terms (no brands).",
+        "- Number the steps in order starting from 1.",
         "- Parse quantities/units if present; leave null if not determinable.",
-        "- Note ingredient information such as preparation methods and descriptors like 'large boneless skinless chicken breast' and 'chopped' or '(or chicken broth)'.",
+        "- Note ingredient information such as preparation methods and descriptors like 'roughly chopped', 'drained', 'minced', 'ground', 'finely grated', 'or other flour', or '(or chicken broth)'.",
         " - But, if the descriptor is important for identifying the ingredient, include it in the name; such as 'unsalted butter'. Ingredients should be in the form of a grocery to be bought from a store. Do not omit important descriptors that affect the ingredient identity. Do not repeat ingredients even if they are alternatives. Mention alternatives in the notes field of the ingredient if possible.",
+        "- Use abbreviations where appropriate. Such as 'tbsp' for tablespoon, 'tsp' for teaspoon, 'oz' for ounce, 'lb' for pound, 'g' for gram, 'kg' for kilogram, 'ml' for milliliter, and 'l' for liter.",
         "- Keep steps as concise imperative sentences.",
-        "- Do NOT invent data not in PAGE_TEXT.",
+        "- Do NOT invent data not in PAGE_TEXT. But, if servings are not specified, guess.",
         f"SOURCE_URL: {url or ''}",
         "PAGE_TEXT:",
         text[:120000],
@@ -51,7 +53,7 @@ def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
 
     prompt = _build_prompt(text, url)
     model = genai.GenerativeModel(
-        "gemini-2.5-flash",
+        "gemini-2.5-pro",
         generation_config={
             "temperature": 0,
             "response_mime_type": "application/json",

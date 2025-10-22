@@ -3,16 +3,9 @@
   "properties": {
     "title": { "type": "string" },
     "source_url": { "type": "string" },
-    "yield_text": { "type": "string" },
     "servings": { "type": "number" },
-    "time": {
-      "type": "object",
-      "properties": {
-        "prep_min": { "type": "number" },
-        "cook_min": { "type": "number" },
-        "total_min": { "type": "number" }
-      }
-    },
+    "prep_min": { "type": "number" },
+    "cook_min": { "type": "number" },
     "ingredients": {
       "type": "array",
       "items": {

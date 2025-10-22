@@ -58,6 +58,11 @@ class Settings:
     # Optional ingredient properties in the Ingredients DB
     P_ING_UNIT: str = _get("P_ING_UNIT", "Unit")
     P_ING_NOTES: str = _get("P_ING_NOTES", "Notes")
+    # Ingredient DB property keys (customizable)
+    P_ING_TITLE: str = _get("P_ING_TITLE", "Name")
+    P_ING_RAW: str = _get("P_ING_RAW", "Raw")
+    P_ING_QTY: str = _get("P_ING_QTY", "Quantity")
+    P_ING_RECIPES_REL: str = _get("P_ING_RECIPES_REL", "Recipes")
 
     # Logging configuration
     # LOG_LEVEL can be DEBUG, INFO, WARNING, ERROR, or CRITICAL

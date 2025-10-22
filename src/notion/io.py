@@ -47,7 +47,7 @@ def list_ingredients() -> Dict[str, str]:
     for page in _paginate_query(client, db):
         props = page.get("properties", {})
         # assume title property is first title
-        title_key = settings.P_RECIPE_TITLE
+        title_key = settings.P_ING_TITLE
         title_prop = props.get(title_key) or props.get("Name")
         name = ""
         if title_prop and title_prop.get("title"):
@@ -89,7 +89,7 @@ def upsert_ingredient(
 
     logger.debug("upsert_ingredient: ingredient DB properties: %s", list(db_props.keys()))
 
-    title_key = settings.P_RECIPE_TITLE
+    title_key = settings.P_ING_TITLE
     # naive search by filter using title property key (Title property)
     filter_key = title_key if title_key in db_props else "Name"
     resp = client.databases.query(
@@ -100,25 +100,25 @@ def upsert_ingredient(
         page_id = resp["results"][0]["id"]
         update_props: dict = {}
         # Quantity (number)
-        qty_key = "Quantity"
+        qty_key = settings.P_ING_QTY
         if quantity is not None and qty_key in db_props and db_props[qty_key].get("type") == "number":
             update_props[qty_key] = {"number": quantity}
         # Unit
-        unit_key = "Unit"
+        unit_key = settings.P_ING_UNIT
         if unit and unit_key in db_props and db_props[unit_key].get("type") in ("rich_text", "title"):
             if db_props[unit_key].get("type") == "title":
                 update_props[unit_key] = {"title": [{"text": {"content": unit}}]}
             else:
                 update_props[unit_key] = {"rich_text": [{"text": {"content": unit}}]}
         # Notes
-        notes_key = "Notes"
+        notes_key = settings.P_ING_NOTES
         if notes and notes_key in db_props and db_props[notes_key].get("type") in ("rich_text", "title"):
             if db_props[notes_key].get("type") == "title":
                 update_props[notes_key] = {"title": [{"text": {"content": notes}}]}
             else:
                 update_props[notes_key] = {"rich_text": [{"text": {"content": notes}}]}
         # Raw
-        raw_key = "Raw"
+        raw_key = settings.P_ING_RAW
         if raw and raw_key in db_props and db_props[raw_key].get("type") in ("rich_text", "title"):
             if db_props[raw_key].get("type") == "title":
                 update_props[raw_key] = {"title": [{"text": {"content": raw}}]}
@@ -139,25 +139,25 @@ def upsert_ingredient(
     # Prepare properties for creation, include optional fields only if DB has them
     props = {filter_key: {"title": [{"text": {"content": name}}]}}
     # Quantity (number)
-    qty_key = "Quantity"
+    qty_key = settings.P_ING_QTY
     if quantity is not None and qty_key in db_props and db_props[qty_key].get("type") == "number":
         props[qty_key] = {"number": quantity}
     # Unit
-    unit_key = "Unit"
+    unit_key = settings.P_ING_UNIT
     if unit and unit_key in db_props and db_props[unit_key].get("type") in ("rich_text", "title"):
         if db_props[unit_key].get("type") == "title":
             props[unit_key] = {"title": [{"text": {"content": unit}}]}
         else:
             props[unit_key] = {"rich_text": [{"text": {"content": unit}}]}
     # Notes
-    notes_key = "Notes"
+    notes_key = settings.P_ING_NOTES
     if notes and notes_key in db_props and db_props[notes_key].get("type") in ("rich_text", "title"):
         if db_props[notes_key].get("type") == "title":
             props[notes_key] = {"title": [{"text": {"content": notes}}]}
         else:
             props[notes_key] = {"rich_text": [{"text": {"content": notes}}]}
     # Raw
-    raw_key = "Raw"
+    raw_key = settings.P_ING_RAW
     if raw and raw_key in db_props and db_props[raw_key].get("type") in ("rich_text", "title"):
         if db_props[raw_key].get("type") == "title":
             props[raw_key] = {"title": [{"text": {"content": raw}}]}
@@ -169,7 +169,16 @@ def upsert_ingredient(
     return page.get("id"), True
 
 
-def upsert_recipe(title: str, source_url: Optional[str] = None) -> Tuple[str, bool]:
+def upsert_recipe(recipe) -> Tuple[str, bool]:
+    """Create or update a recipe page using the RecipePayload object.
+
+    Maps these payload fields into the Recipes DB when available:
+    - Name (title)
+    - Source (url)
+    - Servings (number)
+    - Prep Time / Cook Time (number)
+    - Steps (rich_text) — joined into a single text block
+    """
     client = get_client()
     db = settings.RECIPES_DB_ID
     if not db:
@@ -184,24 +193,63 @@ def upsert_recipe(title: str, source_url: Optional[str] = None) -> Tuple[str, bo
 
     logger.debug("upsert_recipe: recipes DB properties: %s", list(db_props.keys()))
 
-    # Determine property keys
     title_key = settings.P_RECIPE_TITLE
-    source_key = settings.P_RECIPE_SOURCE_URL
-    has_source = source_key in db_props and db_props[source_key].get("type") == "url"
+    title = getattr(recipe, "title", None) or ""
 
-    # Build filter: always include title match; include source URL only if property exists
+    # Build filter: match existing by title
     filter_clauses = [{"property": title_key, "title": {"equals": title}}]
-    if source_url and has_source:
-        filter_clauses.append({"property": source_key, "url": {"equals": source_url}})
+    # if Source property exists and recipe has source_url, include it in filter
+    source_key = settings.P_RECIPE_SOURCE_URL
+    if getattr(recipe, "source_url", None) and source_key in db_props and db_props[source_key].get("type") == "url":
+        filter_clauses.append({"property": source_key, "url": {"equals": getattr(recipe, "source_url")}})
+
     resp = client.databases.query(database_id=db, filter={"and": filter_clauses})
     if resp.get("results"):
-        logger.debug("upsert_recipe: found existing recipe %s", title)
-        return resp["results"][0]["id"], False
+        page_id = resp["results"][0]["id"]
+        logger.debug("upsert_recipe: found existing recipe %s -> %s", title, page_id)
+        # Optionally update numeric fields if present
+        update_props: dict = {}
+        servings_key = "Servings"
+        if getattr(recipe, "servings", None) is not None and servings_key in db_props and db_props[servings_key].get("type") == "number":
+            update_props[servings_key] = {"number": getattr(recipe, "servings")}
+        prep_key = "Prep Time"
+        if getattr(recipe, "time", None) and getattr(recipe.time, "prep_min", None) is not None and prep_key in db_props and db_props[prep_key].get("type") == "number":
+            update_props[prep_key] = {"number": getattr(recipe.time, "prep_min")}
+        cook_key = "Cook Time"
+        if getattr(recipe, "time", None) and getattr(recipe.time, "cook_min", None) is not None and cook_key in db_props and db_props[cook_key].get("type") == "number":
+            update_props[cook_key] = {"number": getattr(recipe.time, "cook_min")}
+        steps_key = "Steps"
+        if getattr(recipe, "steps", None) and steps_key in db_props and db_props[steps_key].get("type") == "rich_text":
+            steps_text = "\n".join(getattr(recipe, "steps", []))
+            update_props[steps_key] = {"rich_text": [{"text": {"content": steps_text}}]}
 
-    # Prepare properties for creation
+        if update_props:
+            try:
+                client.pages.update(page_id=page_id, properties=update_props)
+                logger.info("upsert_recipe: updated recipe page %s", page_id)
+            except Exception:
+                logger.exception("upsert_recipe: failed to update recipe %s", page_id)
+
+        return page_id, False
+
+    # Create new page
     props = {title_key: {"title": [{"text": {"content": title}}]}}
-    if source_url and has_source:
-        props[source_key] = {"url": source_url}
+    # Source
+    if getattr(recipe, "source_url", None) and "Source" in db_props and db_props["Source"].get("type") == "url":
+        props["Source"] = {"url": getattr(recipe, "source_url")}
+    # Servings
+    if getattr(recipe, "servings", None) is not None and "Servings" in db_props and db_props["Servings"].get("type") == "number":
+        props["Servings"] = {"number": getattr(recipe, "servings")}
+    # Prep/Cook times
+    if getattr(recipe, "time", None):
+        if getattr(recipe.time, "prep_min", None) is not None and "Prep Time" in db_props and db_props["Prep Time"].get("type") == "number":
+            props["Prep Time"] = {"number": getattr(recipe.time, "prep_min")}
+        if getattr(recipe.time, "cook_min", None) is not None and "Cook Time" in db_props and db_props["Cook Time"].get("type") == "number":
+            props["Cook Time"] = {"number": getattr(recipe.time, "cook_min")}
+    # Steps
+    if getattr(recipe, "steps", None) and "Steps" in db_props and db_props["Steps"].get("type") == "rich_text":
+        props["Steps"] = {"rich_text": [{"text": {"content": "\n".join(getattr(recipe, "steps", []))}}]}
+
     page = client.pages.create(parent={"database_id": db}, properties=props)
     logger.info("upsert_recipe: created recipe page %s for %s", page.get("id"), title)
     return page.get("id"), True
@@ -227,21 +275,17 @@ def upsert_recipe_ingredient(
     # Find relation properties in the junction DB
     relation_keys = [k for k, v in db_props.items() if v.get("type") == "relation"]
 
-    # Prefer explicit property names if they exist, otherwise pick relation props
-    recipe_key = "Recipe" if "Recipe" in db_props else (relation_keys[0] if relation_keys else None)
-    ingredient_key = (
-        "Ingredient"
-        if "Ingredient" in db_props
-        else (relation_keys[1] if len(relation_keys) > 1 else (relation_keys[0] if relation_keys else None))
+    # Prefer explicit property names discovered in the workspace dump
+    recipe_key = "Recipes" if "Recipes" in db_props else (relation_keys[0] if relation_keys else None)
+    ingredient_key = "Ingredients" if "Ingredients" in db_props else (
+        relation_keys[1] if len(relation_keys) > 1 else (relation_keys[0] if relation_keys else None)
     )
 
     if not recipe_key or not ingredient_key:
         available = ", ".join(sorted(db_props.keys())) or "<none>"
-        logger.error(
-            "Junction DB missing relation properties. Available properties: %s", available
-        )
+        logger.error("Junction DB missing relation properties. Available properties: %s", available)
         raise RuntimeError(
-            f"Junction DB missing relation properties. Expected 'Recipe' and 'Ingredient' or at least two relation properties. Available properties: {available}"
+            f"Junction DB missing relation properties. Expected 'Recipes' and 'Ingredients' or at least two relation properties. Available properties: {available}"
         )
 
     props = {
@@ -249,11 +293,20 @@ def upsert_recipe_ingredient(
         ingredient_key: {"relation": [{"id": ingredient_page_id}]},
     }
 
-    # Only set the qty property if it exists and is a number
+    # Qty on junction appears to be named by settings.P_RECIPING_QTY_PER_SERVING in the DB
     qty_key = settings.P_RECIPING_QTY_PER_SERVING
     if qty_per_serving is not None and qty_key in db_props and db_props[qty_key].get("type") == "number":
         logger.debug("upsert_recipe_ingredient: setting qty %s on key %s", qty_per_serving, qty_key)
         props[qty_key] = {"number": qty_per_serving}
+
+    # Unit and Note fields on the junction (optional)
+    unit_key = "Unit"
+    if unit_key in db_props and db_props[unit_key].get("type") in ("rich_text", "title"):
+        # we don't have a unit value here by default; callers can extend if needed
+        pass
+    note_key = "Note"
+    if note_key in db_props and db_props[note_key].get("type") in ("rich_text", "title"):
+        pass
 
     page = client.pages.create(parent={"database_id": db}, properties=props)
     logger.info("upsert_recipe_ingredient: created junction %s", page.get("id"))

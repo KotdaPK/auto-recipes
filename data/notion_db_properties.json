@@ -1,0 +1,39 @@
+{
+  "recipes": {
+    "id": "292a679ab1d9802da697c3ae75571f56",
+    "properties": {
+      "Steps": "rich_text",
+      "Total Time": "formula",
+      "Servings": "number",
+      "Source": "url",
+      "Prep Time": "number",
+      "Cook Time": "number",
+      "Meals": "relation",
+      "Ingredients": "relation",
+      "Recipe_Ingredients": "relation",
+      "Name": "title"
+    }
+  },
+  "ingredients": {
+    "id": "292a679ab1d98055b662ff60d9691ea0",
+    "properties": {
+      "Notes": "rich_text",
+      "Quantity": "number",
+      "Recipes": "relation",
+      "Unit": "rich_text",
+      "Raw": "rich_text",
+      "Name": "title"
+    }
+  },
+  "recipe_ingredients": {
+    "id": "292a679ab1d980a2bc50e41412fb44e0",
+    "properties": {
+      "Ingredients": "relation",
+      "Unit": "rich_text",
+      "Note": "rich_text",
+      "Recipes": "relation",
+      "Qty/Serving": "number",
+      "Name": "title"
+    }
+  }
+}
