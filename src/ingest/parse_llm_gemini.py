@@ -20,25 +20,26 @@ except Exception:
     _HAS_JSONSCHEMA = False
 
 
-def _build_prompt(text: str, url: Optional[str]) -> str:
+def _build_prompt(text: str, url: Optional[str], schema) -> str:
     # Strongly require 'notes' to be filled where any preparation, parenthetical, or alternative text exists.
     # If none apply, explicitly set notes to an empty string "" in the JSON output.
     return "\n\n".join([
-        "Extract exactly ONE cooking recipe from PAGE_TEXT into the provided JSON schema.",
-        "- Normalize ingredient names to common grocery terms (no brands).",
-        "- Number the steps in order starting from 1.",
+        f"SOURCE_URL: {url or ''}",
+        "Extract exactly ONE cooking recipe from the website into the provided JSON schema.",
+        "- Normalize ingredient names to common grocery terms; no brands and .",
         "- Parse quantities/units if present; leave null if not determinable.",
         "- For each ingredient, ALWAYS include a 'notes' string. Put preparation methods, descriptors, parenthetical alternatives, and optional swaps into 'notes' (e.g., 'drained', 'minced', 'roughly chopped', 'or chicken broth').",
         "- If a descriptor changes the ingredient identity (e.g., 'unsalted butter'), include that descriptor in the 'name' instead of notes.",
         "- If no notes apply, set notes to an empty string: \"\".",
-        "- Do NOT invent data not present in PAGE_TEXT; copy descriptors/alternatives verbatim into notes where present.",
+        "- Do NOT invent data not present in the website; copy descriptors/alternatives verbatim into notes where present.",
         "- Use standard abbreviations: tbsp, tsp, oz, lb, g, kg, ml, l.",
         "- Keep steps short imperative sentences.",
         "Example ingredient JSON entries (illustrative, non-exhaustive):",
         '[{"raw":"1/2 cup dry white wine (or chicken broth)", "name":"dry white wine", "quantity":0.5, "unit":"cup", "notes":"or chicken broth"}]',
-        f"SOURCE_URL: {url or ''}",
-        "PAGE_TEXT:",
-        text[:120000],
+        # "PAGE_TEXT:",
+        # text[:120000],
+        "OUTPUT JSON SCHEMA:",
+        json.dumps(schema, ensure_ascii=False, indent=2),
     ])
 
 def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
@@ -48,27 +49,45 @@ def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
 
     # Lazy import to avoid hard dependency at module import time during tests
     try:
-        import google.generativeai as genai
+        import google.genai as genai
+        from google.genai import types
     except Exception as e:
         raise RuntimeError(
             "google.generativeai is required to call the Gemini API: " + str(e)
         )
 
-    genai.configure(api_key=settings.GEMINI_API_KEY)
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-    prompt = _build_prompt(text, url)
-    model = genai.GenerativeModel(
-        "gemini-2.5-flash",
-        generation_config={
-            "temperature": 0,
-            "response_mime_type": "application/json",
-            "response_schema": RECIPE_RESPONSE_SCHEMA,
-        },
-    )
+    prompt = _build_prompt(text, url, RECIPE_RESPONSE_SCHEMA)
+    url_tool = types.Tool(url_context=types.UrlContext())
 
     for attempt in range(2):
-        resp = model.generate_content([prompt])
-        data = getattr(resp, "parsed", None)
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                tools=[url_tool],
+                temperature=0,
+                # response_mime_type="application/json",
+                # response_schema=RECIPE_RESPONSE_SCHEMA,
+            ),
+        )
+
+
+        raw = getattr(resp, "text", None) or getattr(resp, "output_text", None)
+        if not raw:
+            raise ValueError("No content from Gemini response.")
+        try:
+            # Gemini still emits JSON text — you just have to parse it yourself
+            data = json.loads(raw)
+        except Exception as e:
+            start, end = raw.find("{"), raw.rfind("}")
+            if start != -1 and end != -1:
+                data = json.loads(raw[start:end + 1])
+            else:
+                raise ValueError("Failed to parse JSON.") from e
+
+        # data = getattr(resp, "parsed", None)
 
         if data is None:
             # fallback: manual JSON parse

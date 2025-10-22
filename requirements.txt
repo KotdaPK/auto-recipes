@@ -1,4 +1,4 @@
-google-generativeai>=0.8.5
+google-genai>=0.3.0
 trafilatura>=0.9.6
 requests>=2.31.0
 python-dotenv>=1.0.0
