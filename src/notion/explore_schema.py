@@ -8,19 +8,23 @@ import json
 import os
 import logging
 
+from dotenv import load_dotenv
 from src.settings import settings
 from notion_client import Client
-from dotenv import load_dotenv
+
+# ensure .env is loaded when running script directly
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 
 
 def get_client():
-    if not NOTION_TOKEN:
+    token = os.getenv("NOTION_TOKEN") or settings.NOTION_TOKEN
+    if not token:
         raise RuntimeError("NOTION_TOKEN not configured in environment")
-    print("Using NOTION_TOKEN:", NOTION_TOKEN[:4] + "..." + NOTION_TOKEN[-4:])
-    return Client(auth=NOTION_TOKEN)
+    print("Using NOTION_TOKEN:", token[:4] + "..." + token[-4:])
+    return Client(auth=token)
 
 
 def dump_db_props(client: Client, db_id: str) -> dict:
@@ -35,9 +39,9 @@ def main():
     client = get_client()
     out = {}
     dbs = {
-        "recipes": RECIPES_DB_ID,
-        "ingredients": INGREDIENTS_DB_ID,
-        "recipe_ingredients": RECIPE_ING_DB_ID,
+        "recipes": settings.RECIPES_DB_ID,
+        "ingredients": settings.INGREDIENTS_DB_ID,
+        "recipe_ingredients": settings.RECIPE_ING_DB_ID,
     }
     for name, db_id in dbs.items():
         if not db_id:

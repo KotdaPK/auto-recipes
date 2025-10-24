@@ -117,13 +117,8 @@ def upsert_ingredient(
                 update_props[notes_key] = {"title": [{"text": {"content": notes}}]}
             else:
                 update_props[notes_key] = {"rich_text": [{"text": {"content": notes}}]}
-        # Raw
-        raw_key = settings.P_ING_RAW
-        if raw and raw_key in db_props and db_props[raw_key].get("type") in ("rich_text", "title"):
-            if db_props[raw_key].get("type") == "title":
-                update_props[raw_key] = {"title": [{"text": {"content": raw}}]}
-            else:
-                update_props[raw_key] = {"rich_text": [{"text": {"content": raw}}]}
+        # NOTE: Do not write per-recipe 'raw' text into the Ingredients page.
+        # The 'raw' field is stored on the junction (recipe-ingredient) page instead.
 
         if update_props:
             try:
@@ -156,13 +151,7 @@ def upsert_ingredient(
             props[notes_key] = {"title": [{"text": {"content": notes}}]}
         else:
             props[notes_key] = {"rich_text": [{"text": {"content": notes}}]}
-    # Raw
-    raw_key = settings.P_ING_RAW
-    if raw and raw_key in db_props and db_props[raw_key].get("type") in ("rich_text", "title"):
-        if db_props[raw_key].get("type") == "title":
-            props[raw_key] = {"title": [{"text": {"content": raw}}]}
-        else:
-            props[raw_key] = {"rich_text": [{"text": {"content": raw}}]}
+    # NOTE: Do not set 'raw' on Ingredients pages here. Raw values belong to the junction.
 
     page = client.pages.create(parent={"database_id": db}, properties=props)
     logger.info("upsert_ingredient: created page %s for %s", page.get("id"), name)
@@ -297,7 +286,12 @@ def upsert_recipe(recipe) -> Tuple[str, bool]:
 
 
 def upsert_recipe_ingredient(
-    recipe_page_id: str, ingredient_page_id: str, qty_per_serving: Optional[float]
+    recipe_page_id: str,
+    ingredient_page_id: str,
+    qty_per_serving: Optional[float],
+    unit: Optional[str] = None,
+    notes: Optional[str] = None,
+    raw: Optional[str] = None,
 ) -> str:
     """Create a junction row in RECIPE_ING_DB_ID linking recipe and ingredient."""
     client = get_client()
@@ -333,22 +327,80 @@ def upsert_recipe_ingredient(
         recipe_key: {"relation": [{"id": recipe_page_id}]},
         ingredient_key: {"relation": [{"id": ingredient_page_id}]},
     }
+    # Qty on junction: prefer configured key, then try common fallbacks, then any numeric property
+    qty_candidates = [
+        settings.P_RECIPING_QTY_PER_SERVING,
+        "Qty per Serving",
+        "Quantity",
+        "Qty",
+        "Amount",
+        "Needed Qty",
+    ]
+    used_qty_key: str | None = None
+    for k in qty_candidates:
+        if k and k in db_props and db_props[k].get("type") == "number":
+            used_qty_key = k
+            break
+    if not used_qty_key:
+        # fallback: pick the first numeric property that is not obviously the recipe servings
+        for k, v in db_props.items():
+            if v.get("type") == "number" and k.lower() not in ("servings", "serving"):
+                used_qty_key = k
+                break
 
-    # Qty on junction appears to be named by settings.P_RECIPING_QTY_PER_SERVING in the DB
-    qty_key = settings.P_RECIPING_QTY_PER_SERVING
-    if qty_per_serving is not None and qty_key in db_props and db_props[qty_key].get("type") == "number":
-        logger.debug("upsert_recipe_ingredient: setting qty %s on key %s", qty_per_serving, qty_key)
-        props[qty_key] = {"number": qty_per_serving}
+    if qty_per_serving is not None and used_qty_key:
+        logger.debug("upsert_recipe_ingredient: setting qty %s on key %s", qty_per_serving, used_qty_key)
+        props[used_qty_key] = {"number": qty_per_serving}
 
-    # Unit and Note fields on the junction (optional)
+    # Unit and Note fields on the junction (optional) - write if available
     unit_key = "Unit"
-    if unit_key in db_props and db_props[unit_key].get("type") in ("rich_text", "title"):
-        # we don't have a unit value here by default; callers can extend if needed
-        pass
-    note_key = "Note"
-    if note_key in db_props and db_props[note_key].get("type") in ("rich_text", "title"):
-        pass
+    if unit and unit_key in db_props and db_props[unit_key].get("type") in ("rich_text", "title"):
+        if db_props[unit_key].get("type") == "title":
+            props[unit_key] = {"title": [{"text": {"content": unit}}]}
+        else:
+            props[unit_key] = {"rich_text": [{"text": {"content": unit}}]}
 
-    page = client.pages.create(parent={"database_id": db}, properties=props)
-    logger.info("upsert_recipe_ingredient: created junction %s", page.get("id"))
-    return page.get("id")
+    note_key = "Note"
+    if notes and note_key in db_props and db_props[note_key].get("type") in ("rich_text", "title"):
+        if db_props[note_key].get("type") == "title":
+            props[note_key] = {"title": [{"text": {"content": notes}}]}
+        else:
+            props[note_key] = {"rich_text": [{"text": {"content": notes}}]}
+
+    # Raw field on junction (optional) - some schemas expose a 'Raw' or similar text property
+    raw_key = "Raw"
+    if raw and raw_key in db_props and db_props[raw_key].get("type") in ("rich_text", "title"):
+        if db_props[raw_key].get("type") == "title":
+            props[raw_key] = {"title": [{"text": {"content": raw}}]}
+        else:
+            props[raw_key] = {"rich_text": [{"text": {"content": raw}}]}
+
+    # Try to find an existing junction row linking this recipe and ingredient
+    try:
+        # Build a filter that looks for pages where both relation properties include the ids
+        filter_clauses = [
+            {"property": recipe_key, "relation": {"contains": recipe_page_id}},
+            {"property": ingredient_key, "relation": {"contains": ingredient_page_id}},
+        ]
+        resp = client.databases.query(database_id=db, filter={"and": filter_clauses}, page_size=1)
+        if resp.get("results"):
+            page_id = resp["results"][0]["id"]
+            try:
+                client.pages.update(page_id=page_id, properties=props)
+                logger.info("upsert_recipe_ingredient: updated junction %s", page_id)
+                return page_id
+            except Exception:
+                logger.exception("upsert_recipe_ingredient: failed to update existing junction %s", page_id)
+        # No existing junction found; create a new one
+        page = client.pages.create(parent={"database_id": db}, properties=props)
+        logger.info("upsert_recipe_ingredient: created junction %s", page.get("id"))
+        return page.get("id")
+    except Exception:
+        # Best-effort create if query/update fails
+        try:
+            page = client.pages.create(parent={"database_id": db}, properties=props)
+            logger.info("upsert_recipe_ingredient: created junction (fallback) %s", page.get("id"))
+            return page.get("id")
+        except Exception:
+            logger.exception("upsert_recipe_ingredient: final fallback failed to create junction")
+            raise

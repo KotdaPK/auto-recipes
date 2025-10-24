@@ -82,9 +82,10 @@ def map_and_upsert(recipe: RecipePayload, index, threshold: float = 0.92) -> Dic
         merged_qty = agg["quantity"] if agg["quantity_counted"] > 0 else None
         merged_unit = agg["unit"]
 
-        # upsert ingredient page (will update existing if needed)
+        # upsert ingredient page (store canonical name and raw if available).
+        # Do NOT store recipe-specific qty/unit/notes on the ingredient page; those belong on the junction.
         page_id, created_flag = notion_io.upsert_ingredient(
-            agg["name"], raw=merged_raw, quantity=merged_qty, unit=merged_unit, notes=merged_notes
+            agg["name"], raw=merged_raw
         )
         logger.info("ingredient mapped (aggregated): %s -> %s (created=%s, score=%s)", agg["name"], page_id, created_flag, agg.get("score"))
 
@@ -106,9 +107,11 @@ def map_and_upsert(recipe: RecipePayload, index, threshold: float = 0.92) -> Dic
         })
         summary["ingredients"].append(base)
 
-        # create single junction for aggregated ingredient quantity
+        # create or update junction row for this recipe <-> ingredient
         try:
-            j_page = notion_io.upsert_recipe_ingredient(recipe_page_id, page_id, merged_qty)
+            j_page = notion_io.upsert_recipe_ingredient(
+                recipe_page_id, page_id, merged_qty, unit=merged_unit, notes=merged_notes, raw=merged_raw
+            )
             logger.info("junction created: %s linking recipe %s to ingredient %s", j_page, recipe_page_id, page_id)
             summary["junctions"].append({"page_id": j_page, "ingredient": agg["name"]})
         except Exception:
