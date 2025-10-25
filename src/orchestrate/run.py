@@ -15,6 +15,7 @@ from src.ingest.parse_llm_gemini import parse_recipe_text
 from src.dedup.embed_index import EmbedIndex
 from src.notion import mapping as notion_mapping
 from src.notion import io as notion_io
+from src.settings import settings
 
 console = Console()
 
@@ -141,7 +142,23 @@ def url_to_notion(url: str) -> None:
             logger.info("Applied JSON-LD recipe card values: %s", changed)
 
     # build index from Notion existing ingredients
-    existing = notion_io.list_ingredients()
+    # Log Notion configuration so failures to create a client are easier to diagnose
+    try:
+        token_present = bool(os.getenv("NOTION_TOKEN") or getattr(__import__("src.settings"), "settings").NOTION_TOKEN)
+    except Exception:
+        token_present = False
+    logger.debug("Notion token present: %s", token_present)
+    logger.debug(
+        "Configured DB IDs: RECIPES=%s INGREDIENTS=%s RECIPE_ING=%s",
+        settings.RECIPES_DB_ID,
+        settings.INGREDIENTS_DB_ID,
+        settings.RECIPE_ING_DB_ID,
+    )
+    try:
+        existing = notion_io.list_ingredients()
+    except Exception as e:
+        logger.exception("Failed to list ingredients from Notion: %s", e)
+        raise
     names = list(existing.keys())
     index = EmbedIndex()
     index.build(names)
@@ -162,8 +179,8 @@ def url_to_notion(url: str) -> None:
     wrapper = _Idx(index)
 
     summary = notion_mapping.map_and_upsert(recipe, wrapper)
-    logger.info("Ingest summary: %s", json.dumps(summary, indent=2))
-    logger.info("Recipe parsed: %s", recipe.model_dump_json(indent=2))
+    # logger.info("Ingest summary: %s", json.dumps(summary, indent=2))
+    # logger.info("Recipe parsed: %s", recipe.model_dump_json(indent=2))
 
     # Persist ingest artifacts for auditing / debugging: recipe payload and summary
     try:

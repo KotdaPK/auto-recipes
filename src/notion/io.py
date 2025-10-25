@@ -13,10 +13,17 @@ import os
 logger = logging.getLogger(__name__)
 
 def get_client() -> Client:
-  notion_token = os.getenv("NOTION_TOKEN")
-  if not notion_token:
-    raise RuntimeError("NOTION_TOKEN not configured")
-  return Client(auth=notion_token)
+    notion_token = os.getenv("NOTION_TOKEN") or settings.NOTION_TOKEN
+    if not notion_token:
+        logger.error("get_client: NOTION_TOKEN not configured in env or settings")
+        raise RuntimeError("NOTION_TOKEN not configured")
+    # Mask token for logs: show first/last 4 chars only
+    try:
+            masked = notion_token[:4] + "..." + notion_token[-4:]
+    except Exception:
+            masked = "<redacted>"
+    logger.debug("get_client: creating notion Client (token=%s)", masked)
+    return Client(auth=notion_token)
 
 
 def _paginate_query(
@@ -294,6 +301,15 @@ def upsert_recipe_ingredient(
     raw: Optional[str] = None,
 ) -> str:
     """Create a junction row in RECIPE_ING_DB_ID linking recipe and ingredient."""
+    logger.debug(
+        "upsert_recipe_ingredient: inputs recipe=%s ingredient=%s qty=%s unit=%s notes_present=%s raw_len=%s",
+        recipe_page_id,
+        ingredient_page_id,
+        qty_per_serving,
+        unit,
+        bool(notes),
+        len(raw) if raw else 0,
+    )
     client = get_client()
     db = settings.RECIPE_ING_DB_ID
     if not db:
@@ -306,6 +322,7 @@ def upsert_recipe_ingredient(
         db_props = {}
 
     logger.debug("upsert_recipe_ingredient: junction DB properties: %s", list(db_props.keys()))
+
 
     # Find relation properties in the junction DB
     relation_keys = [k for k, v in db_props.items() if v.get("type") == "relation"]
@@ -377,6 +394,7 @@ def upsert_recipe_ingredient(
 
     # Try to find an existing junction row linking this recipe and ingredient
     try:
+        logger.debug("upsert_recipe_ingredient: props keys to write: %s", list(props.keys()))
         # Build a filter that looks for pages where both relation properties include the ids
         filter_clauses = [
             {"property": recipe_key, "relation": {"contains": recipe_page_id}},

@@ -100,6 +100,15 @@ def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
             # data may be a Python object; dump as JSON
             with open(parsed_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+            # also dump a lightweight repr of the full response object for debugging
+            try:
+                resp_repr_path = f"data/gemini/gemini_{ts}.repr"
+                with open(resp_repr_path, "w", encoding="utf-8") as f:
+                    f.write(repr(resp))
+                logger.info("Wrote Gemini full resp repr -> %s", resp_repr_path)
+            except Exception:
+                logger.debug("Failed to write Gemini resp repr; continuing")
+
             logger.info("Wrote Gemini raw response -> %s", raw_path)
             logger.info("Wrote Gemini parsed JSON -> %s", parsed_path)
         except Exception:

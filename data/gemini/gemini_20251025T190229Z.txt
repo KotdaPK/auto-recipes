@@ -1,0 +1,107 @@
+```json
+{
+  "title": "Pad See Ew (Thai Stir Fried Noodles)",
+  "source_url": "https://www.recipetineats.com/thai-stir-fried-noodles-pad-see-ew/",
+  "servings": 3,
+  "prep_min": 8,
+  "cook_min": 10,
+  "ingredients": [
+    {
+      "raw": "200g / 7 oz dried wide rice stick noodles , or 15 oz / 450g fresh wide flat rice noodles (Sen Yai) (Note 1)",
+      "name": "wide rice stick noodles",
+      "quantity": 200,
+      "unit": "g",
+      "notes": "dried, or 450g fresh wide flat rice noodles (Sen Yai)"
+    },
+    {
+      "raw": "2 tsp dark soy sauce (Note 2)",
+      "name": "dark soy sauce",
+      "quantity": 2,
+      "unit": "tsp",
+      "notes": ""
+    },
+    {
+      "raw": "1 1/2 tbsp oyster sauce",
+      "name": "oyster sauce",
+      "quantity": 1.5,
+      "unit": "tbsp",
+      "notes": ""
+    },
+    {
+      "raw": "1 tbsp light soy sauce (or all purpose, Note 3)",
+      "name": "light soy sauce",
+      "quantity": 1,
+      "unit": "tbsp",
+      "notes": "or all purpose"
+    },
+    {
+      "raw": "2 tsp white vinegar (plain white vinegar)",
+      "name": "white vinegar",
+      "quantity": 2,
+      "unit": "tsp",
+      "notes": "plain"
+    },
+    {
+      "raw": "2 tsp sugar (any type)",
+      "name": "sugar",
+      "quantity": 2,
+      "unit": "tsp",
+      "notes": "any type"
+    },
+    {
+      "raw": "3 tbsp peanut or vegetable oil , separated",
+      "name": "peanut oil",
+      "quantity": 3,
+      "unit": "tbsp",
+      "notes": "or vegetable oil, separated"
+    },
+    {
+      "raw": "2 cloves garlic cloves, very finely chopped",
+      "name": "garlic",
+      "quantity": 2,
+      "unit": "cloves",
+      "notes": "very finely chopped"
+    },
+    {
+      "raw": "1 cup / 150g / 5oz chicken thighs (boneless, skinless), sliced (Note 4)",
+      "name": "chicken thighs",
+      "quantity": 150,
+      "unit": "g",
+      "notes": "boneless, skinless, sliced"
+    },
+    {
+      "raw": "1 large egg",
+      "name": "egg",
+      "quantity": 1,
+      "unit": null,
+      "notes": "large"
+    },
+    {
+      "raw": "4 stems Chinese broccoli (Note 5)",
+      "name": "Chinese broccoli",
+      "quantity": 4,
+      "unit": "stems",
+      "notes": ""
+    }
+  ],
+  "steps": [
+    "Trim the ends of the Chinese broccoli and cut into 7.5cm/3\" pieces.",
+    "Separate the leaves from the stems.",
+    "Cut thick stems in half vertically so they are no wider than 0.8cm / 0.3\" thick.",
+    "Prepare noodles according to packet directions and drain, timing it so they are cooked just before using.",
+    "Mix sauce ingredients until sugar dissolves.",
+    "Heat 1 tbsp oil in a very large heavy based skillet or wok over high heat.",
+    "Add garlic and cook for 15 seconds.",
+    "Add chicken and cook until it mostly changes from pink to white.",
+    "Add Chinese broccoli stems and cook until chicken is almost cooked through.",
+    "Add Chinese broccoli leaves and cook until just wilted.",
+    "Push everything to one side, crack in the egg, and scramble it.",
+    "Remove everything from the wok onto a plate, scraping the wok clean.",
+    "Return wok to stove, heat 2 tbsp oil over high heat until it starts smoking (HOT is key!).",
+    "Add noodles and Sauce.",
+    "Toss as few times as possible to disperse Sauce and make edges of noodles caramelise, about 1 to 1 1/2 minutes.",
+    "Quickly add chicken and vegetables back in, and toss to disperse.",
+    "Serve immediately!"
+  ]
+}
+```
