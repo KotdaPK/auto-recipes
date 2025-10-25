@@ -1,0 +1,145 @@
+{
+  "recipe": {
+    "page_id": "297a679a-b1d9-8114-956d-f0958347e5b9",
+    "created": true
+  },
+  "ingredients": [
+    {
+      "raw": "3 tablespoons butter",
+      "name": "butter",
+      "description": null,
+      "quantity": 3.0,
+      "unit": "tbsp",
+      "notes": null,
+      "page_id": "297a679a-b1d9-81fe-8f1f-df39d88179a7",
+      "created": true,
+      "score": 0.7664687633514404
+    },
+    {
+      "raw": "2 tablespoons extra-virgin olive oil",
+      "name": "olive oil",
+      "description": null,
+      "quantity": 2.0,
+      "unit": "tbsp",
+      "notes": null,
+      "page_id": "295a679a-b1d9-8119-bcb7-fcca88e10e4f",
+      "created": false,
+      "score": 1.0
+    },
+    {
+      "raw": "4 garlic cloves, minced",
+      "name": "garlic cloves",
+      "description": null,
+      "quantity": 4.0,
+      "unit": null,
+      "notes": "minced",
+      "page_id": "295a679a-b1d9-8122-b113-f381ebf92596",
+      "created": false,
+      "score": 1.0
+    },
+    {
+      "raw": "½ cup dry white wine",
+      "name": "dry white wine",
+      "description": null,
+      "quantity": 0.5,
+      "unit": "cup",
+      "notes": "or chicken broth",
+      "page_id": "295a679a-b1d9-81c1-a81a-d46ca689729c",
+      "created": false,
+      "score": 1.0
+    },
+    {
+      "raw": "1 teaspoon kosher salt",
+      "name": "kosher salt",
+      "description": null,
+      "quantity": 1.0,
+      "unit": "tsp",
+      "notes": null,
+      "page_id": "295a679a-b1d9-8105-981c-d757e99c5929",
+      "created": false,
+      "score": 1.0
+    },
+    {
+      "raw": "¼ teaspoon red pepper flakes",
+      "name": "red pepper flakes",
+      "description": null,
+      "quantity": 0.25,
+      "unit": "tsp",
+      "notes": null,
+      "page_id": "297a679a-b1d9-81c8-8d87-ceaa20dc7a6d",
+      "created": true,
+      "score": 0.5942161083221436
+    },
+    {
+      "raw": "1 ½ pounds large or jumbo shrimp, peeled and deveined",
+      "name": "shrimp",
+      "description": null,
+      "quantity": 1.5,
+      "unit": "lb",
+      "notes": "large or jumbo, peeled and deveined",
+      "page_id": "297a679a-b1d9-8126-8d42-ebd61a12b683",
+      "created": true,
+      "score": 0.34411901235580444
+    },
+    {
+      "raw": "½ lemon",
+      "name": "lemon",
+      "description": null,
+      "quantity": 0.5,
+      "unit": null,
+      "notes": null,
+      "page_id": "297a679a-b1d9-8101-a01f-c3d29cdd8faf",
+      "created": true,
+      "score": 0.8164806365966797
+    },
+    {
+      "raw": "2 tablespoons finely chopped fresh parsley",
+      "name": "parsley",
+      "description": null,
+      "quantity": 2.0,
+      "unit": "tbsp",
+      "notes": "finely chopped",
+      "page_id": "295a679a-b1d9-8174-93f8-eddfad9c2e27",
+      "created": false,
+      "score": 1.0
+    }
+  ],
+  "junctions": [
+    {
+      "page_id": "297a679a-b1d9-81b2-a31c-cee2ec01c299",
+      "ingredient": "butter"
+    },
+    {
+      "page_id": "297a679a-b1d9-81ce-b507-fbb73ca1cce1",
+      "ingredient": "olive oil"
+    },
+    {
+      "page_id": "297a679a-b1d9-81aa-ba36-d1c9ebe18a7d",
+      "ingredient": "garlic cloves"
+    },
+    {
+      "page_id": "297a679a-b1d9-81fc-ba2b-c57769ff1ce3",
+      "ingredient": "dry white wine"
+    },
+    {
+      "page_id": "297a679a-b1d9-815d-897e-ebcf531143d5",
+      "ingredient": "kosher salt"
+    },
+    {
+      "page_id": "297a679a-b1d9-8114-a143-fcd513814228",
+      "ingredient": "red pepper flakes"
+    },
+    {
+      "page_id": "297a679a-b1d9-81fd-8dd7-dcb3b98175d5",
+      "ingredient": "shrimp"
+    },
+    {
+      "page_id": "297a679a-b1d9-8152-9ff3-dc1d286dc714",
+      "ingredient": "lemon"
+    },
+    {
+      "page_id": "297a679a-b1d9-8186-95d4-f6ed4cc45454",
+      "ingredient": "parsley"
+    }
+  ]
+}

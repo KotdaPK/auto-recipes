@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 import logging
 from typing import Optional
+from datetime import datetime
+import os
 from pydantic import ValidationError
 from src.models.recipe_schema import RecipePayload
 from src.settings import settings, RECIPE_RESPONSE_SCHEMA
@@ -86,6 +88,22 @@ def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
                 data = json.loads(raw[start:end + 1])
             else:
                 raise ValueError("Failed to parse JSON.") from e
+
+        # Persist raw Gemini response and (best-effort) parsed JSON for debugging/artifacts
+        try:
+            os.makedirs("data/gemini", exist_ok=True)
+            ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+            raw_path = f"data/gemini/gemini_{ts}.txt"
+            parsed_path = f"data/gemini/gemini_{ts}.json"
+            with open(raw_path, "w", encoding="utf-8") as f:
+                f.write(raw)
+            # data may be a Python object; dump as JSON
+            with open(parsed_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            logger.info("Wrote Gemini raw response -> %s", raw_path)
+            logger.info("Wrote Gemini parsed JSON -> %s", parsed_path)
+        except Exception:
+            logger.exception("Failed to write Gemini artifacts")
 
         # data = getattr(resp, "parsed", None)
 

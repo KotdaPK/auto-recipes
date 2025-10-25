@@ -1,0 +1,80 @@
+{
+  "title": "Classic Shrimp Scampi",
+  "source_url": "https://downshiftology.com/recipes/shrimp-scampi/",
+  "servings": 4,
+  "prep_min": 5,
+  "cook_min": 5,
+  "ingredients": [
+    {
+      "raw": "3 tablespoons butter",
+      "name": "butter",
+      "quantity": 3,
+      "unit": "tbsp",
+      "notes": ""
+    },
+    {
+      "raw": "2 tablespoons extra-virgin olive oil",
+      "name": "extra-virgin olive oil",
+      "quantity": 2,
+      "unit": "tbsp",
+      "notes": ""
+    },
+    {
+      "raw": "4 garlic cloves, minced",
+      "name": "garlic cloves",
+      "quantity": 4,
+      "unit": null,
+      "notes": "minced"
+    },
+    {
+      "raw": "½ cup dry white wine",
+      "name": "dry white wine",
+      "quantity": 0.5,
+      "unit": "cup",
+      "notes": "or chicken broth"
+    },
+    {
+      "raw": "1 teaspoon kosher salt",
+      "name": "kosher salt",
+      "quantity": 1,
+      "unit": "tsp",
+      "notes": ""
+    },
+    {
+      "raw": "¼ teaspoon red pepper flakes",
+      "name": "red pepper flakes",
+      "quantity": 0.25,
+      "unit": "tsp",
+      "notes": ""
+    },
+    {
+      "raw": "1 ½ pounds large or jumbo shrimp, peeled and deveined",
+      "name": "shrimp",
+      "quantity": 1.5,
+      "unit": "lb",
+      "notes": "large or jumbo, peeled and deveined"
+    },
+    {
+      "raw": "½ lemon",
+      "name": "lemon",
+      "quantity": 0.5,
+      "unit": null,
+      "notes": ""
+    },
+    {
+      "raw": "2 tablespoons finely chopped fresh parsley",
+      "name": "fresh parsley",
+      "quantity": 2,
+      "unit": "tbsp",
+      "notes": "finely chopped"
+    }
+  ],
+  "steps": [
+    "In a large skillet over medium heat, melt the butter with the oil.",
+    "Add the garlic and saute for 30 seconds.",
+    "Add the wine, salt, and red pepper flakes.",
+    "Bring to a simmer, then reduce by half (about 2 to 3 minutes), stirring occasionally.",
+    "Add the shrimp to the skillet and saute for about 3 minutes, until just cooked through.",
+    "Squeeze the lemon juice on top and toss with the parsley."
+  ]
+}

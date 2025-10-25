@@ -1,0 +1,115 @@
+{
+  "recipe": {
+    "page_id": "297a679a-b1d9-812c-84b5-ce2661481fca",
+    "created": true
+  },
+  "ingredients": [
+    {
+      "raw": "2 medium eggplants, approx 2 to 2 ½ pounds total",
+      "name": "eggplants",
+      "description": null,
+      "quantity": 2.0,
+      "unit": "medium",
+      "notes": "approx 2 to 2 ½ pounds total",
+      "page_id": "297a679a-b1d9-8164-8b5f-ef32989ee453",
+      "created": true,
+      "score": 0.4129815697669983
+    },
+    {
+      "raw": "3 tablespoons tahini",
+      "name": "tahini",
+      "description": null,
+      "quantity": 3.0,
+      "unit": "tbsp",
+      "notes": null,
+      "page_id": "297a679a-b1d9-8165-a4a3-ce22bfda0f4b",
+      "created": true,
+      "score": 0.34016042947769165
+    },
+    {
+      "raw": "2 tablespoons extra-virgin olive oil",
+      "name": "olive oil",
+      "description": null,
+      "quantity": 2.0,
+      "unit": "tbsp",
+      "notes": null,
+      "page_id": "295a679a-b1d9-8119-bcb7-fcca88e10e4f",
+      "created": false,
+      "score": 1.0
+    },
+    {
+      "raw": "1 ½ tablespoon lemon juice",
+      "name": "lemon juice",
+      "description": null,
+      "quantity": 1.5,
+      "unit": "tbsp",
+      "notes": null,
+      "page_id": "295a679a-b1d9-8171-b80f-d64a8723c898",
+      "created": false,
+      "score": 1.0
+    },
+    {
+      "raw": "1 garlic clove, minced",
+      "name": "garlic cloves",
+      "description": null,
+      "quantity": 1.0,
+      "unit": null,
+      "notes": "minced",
+      "page_id": "295a679a-b1d9-8122-b113-f381ebf92596",
+      "created": false,
+      "score": 0.9676535725593567
+    },
+    {
+      "raw": "¼ teaspoon salt, or more to taste",
+      "name": "salt",
+      "description": null,
+      "quantity": 0.25,
+      "unit": "tsp",
+      "notes": "or more to taste",
+      "page_id": "297a679a-b1d9-819f-acab-e71ed5cad04e",
+      "created": true,
+      "score": 0.6775714159011841
+    },
+    {
+      "raw": "1 to 2 teaspoons chopped parsley, for garnishing",
+      "name": "parsley",
+      "description": null,
+      "quantity": 1.0,
+      "unit": "tsp",
+      "notes": "chopped, for garnishing",
+      "page_id": "295a679a-b1d9-8174-93f8-eddfad9c2e27",
+      "created": false,
+      "score": 1.0
+    }
+  ],
+  "junctions": [
+    {
+      "page_id": "297a679a-b1d9-8123-ac24-f0ff93005006",
+      "ingredient": "eggplants"
+    },
+    {
+      "page_id": "297a679a-b1d9-8139-bb7a-e8595d84b538",
+      "ingredient": "tahini"
+    },
+    {
+      "page_id": "297a679a-b1d9-81b9-b109-c4fb129aba1c",
+      "ingredient": "olive oil"
+    },
+    {
+      "page_id": "297a679a-b1d9-81d7-88d1-f181673f2cf5",
+      "ingredient": "lemon juice"
+    },
+    {
+      "page_id": "297a679a-b1d9-8107-b9c7-f4f3f55c93d2",
+      "ingredient": "garlic cloves"
+    },
+    {
+      "page_id": "297a679a-b1d9-81a2-a69d-fa5a4d3453a2",
+      "ingredient": "salt"
+    },
+    {
+      "page_id": "297a679a-b1d9-8116-b38a-ed204b07c563",
+      "ingredient": "parsley"
+    }
+  ]
+}

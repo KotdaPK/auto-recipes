@@ -165,6 +165,24 @@ def url_to_notion(url: str) -> None:
     logger.info("Ingest summary: %s", json.dumps(summary, indent=2))
     logger.info("Recipe parsed: %s", recipe.model_dump_json(indent=2))
 
+    # Persist ingest artifacts for auditing / debugging: recipe payload and summary
+    try:
+        os.makedirs("data/ingests", exist_ok=True)
+        ts = re.sub(r"[^0-9A-Za-z_-]", "", __import__("datetime").datetime.utcnow().strftime("%Y%m%dT%H%M%SZ"))
+        title = getattr(recipe, "title", "recipe") or "recipe"
+        safe_title = re.sub(r"[^0-9A-Za-z_-]", "_", title)[:80]
+        base = f"data/ingests/{ts}_{safe_title}"
+        recipe_path = base + "_recipe.json"
+        summary_path = base + "_summary.json"
+        with open(recipe_path, "w", encoding="utf-8") as f:
+            f.write(recipe.model_dump_json(indent=2))
+        with open(summary_path, "w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+        logger.info("Wrote ingest recipe payload -> %s", recipe_path)
+        logger.info("Wrote ingest summary -> %s", summary_path)
+    except Exception:
+        logger.exception("Failed to write ingest artifacts")
+
 
 def reindex_ingredients(path_base: str = "data/ingredients") -> None:
     logger.info("Reindexing ingredients from Notion...")
