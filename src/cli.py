@@ -1,4 +1,4 @@
-"""Typer CLI for meal-text-to-notion."""
+"""Typer CLI for auto-recipes (ingest, reindex, sync)."""
 
 from __future__ import annotations
 
@@ -26,10 +26,9 @@ logging.basicConfig(
     handlers=handlers,
 )
 
-# Quiet noisy third-party loggers (httpx / httpcore / notion / transformers) while keeping our app logs
+# Quiet noisy third-party loggers while keeping our app logs
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
-logging.getLogger("notion_client").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
 logging.getLogger("google_genai").setLevel(logging.WARNING)
@@ -43,9 +42,9 @@ console = Console()
 
 @app.command()
 def ingest(url: str):
-    """Ingest a single URL into Notion."""
+    """Ingest a single URL and persist parsed artifacts locally."""
     try:
-        orchestrator.url_to_notion(url)
+        orchestrator.url_to_recipe(url)
         console.print("Ingest completed.")
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")

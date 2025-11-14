@@ -32,37 +32,17 @@ class Settings:
     GEMINI_API_KEY: str | None = _get("GEMINI_API_KEY")
 
     # Notion
-    NOTION_TOKEN: str | None = _get("NOTION_TOKEN")
-    RECIPES_DB_ID: str | None = _get("RECIPES_DB_ID")
-    INGREDIENTS_DB_ID: str | None = _get("INGREDIENTS_DB_ID")
-    RECIPE_ING_DB_ID: str | None = _get("RECIPE_ING_DB_ID")
-    MEALS_DB_ID: str | None = _get("MEALS_DB_ID")
-    GROCERY_LINES_DB_ID: str | None = _get("GROCERY_LINES_DB_ID")
-
-    # Notion property names (defaults chosen to common names)
-    P_RECIPE_TITLE: str = _get("P_RECIPE_TITLE", "Name")
-    P_RECIPE_SOURCE_URL: str = _get("P_RECIPE_SOURCE_URL", "Source")
-    P_MEAL_WHEN: str = _get("P_MEAL_WHEN", "When")
-    P_MEAL_TYPE: str = _get("P_MEAL_TYPE", "Meal Type")
-    P_MEAL_PLANNED_SERVINGS: str = _get("P_MEAL_PLANNED_SERVINGS", "Planned Servings")
-    P_MEAL_GOOGLE_EVENT_ID: str = _get("P_MEAL_GOOGLE_EVENT_ID", "Google Event ID")
-    P_RECIPING_QTY_PER_SERVING: str = _get("P_RECIPING_QTY_PER_SERVING", "Qty per Serving")
-    P_GROCERY_WEEK: str = _get("P_GROCERY_WEEK", "Week Start")
-    P_GROCERY_QTY: str = _get("P_GROCERY_QTY", "Needed Qty")
-    P_GROCERY_ING_REL: str = _get("P_GROCERY_ING_REL", "Ingredient")
-    P_GROCERY_FROM_MEAL: str = _get("P_GROCERY_FROM_MEAL", "From Meal")
+    # External integrations (optional)
+    # Notion-related DB ids and tokens were removed; Notion is optional and
+    # any required integration keys should be provided explicitly by the
+    # operator when enabling those sinks.
 
     # Google Calendar
     GCAL_CALENDAR_ID: str = _get("GCAL_CALENDAR_ID", "primary")
     LOCAL_TZ: str = _get("LOCAL_TZ", "UTC")
-    # Optional ingredient properties in the Ingredients DB
+    # Optional ingredient properties (if external sinks are enabled)
     P_ING_UNIT: str = _get("P_ING_UNIT", "Unit")
     P_ING_NOTES: str = _get("P_ING_NOTES", "Notes")
-    # Ingredient DB property keys (customizable)
-    P_ING_TITLE: str = _get("P_ING_TITLE", "Name")
-    P_ING_RAW: str = _get("P_ING_RAW", "Raw")
-    P_ING_QTY: str = _get("P_ING_QTY", "Quantity")
-    P_ING_RECIPES_REL: str = _get("P_ING_RECIPES_REL", "Recipes")
 
     # Logging configuration
     # LOG_LEVEL can be DEBUG, INFO, WARNING, ERROR, or CRITICAL
@@ -82,8 +62,6 @@ def validate_required() -> None:
     This function checks environment variables at runtime so callers can load a .env first.
     """
     missing = []
-    if not os.getenv("NOTION_TOKEN"):
-        missing.append("NOTION_TOKEN (Notion integration token)")
     if not os.getenv("GEMINI_API_KEY"):
         missing.append("GEMINI_API_KEY (Gemini / Google Generative AI key)")
     if missing:

@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import logging
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from pydantic import ValidationError
 from src.models.recipe_schema import RecipePayload
@@ -36,6 +36,7 @@ def _build_prompt(text: str, url: Optional[str], schema) -> str:
         "- Do NOT invent data not present in the website; copy descriptors/alternatives verbatim into notes where present.",
         "- Use standard abbreviations: tbsp, tsp, oz, lb, g, kg, ml, l.",
         "- Keep steps short imperative sentences.",
+        "- Use an empty string \"\" for any text fields you cannot fill from the source and -1 for numeric fields you cannot fill from the source.",
         "Example ingredient JSON entries (illustrative, non-exhaustive):",
         '[{"raw":"1/2 cup dry white wine (or chicken broth)", "name":"dry white wine", "quantity":0.5, "unit":"cup", "notes":"or chicken broth"}]',
         # "PAGE_TEXT:",
@@ -77,6 +78,22 @@ def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
 
 
         raw = getattr(resp, "text", None) or getattr(resp, "output_text", None)
+        # Some SDK responses place content in `candidates[0].content.parts[0].text`.
+        if not raw:
+            try:
+                candidates = getattr(resp, "candidates", None)
+                if candidates and len(candidates) > 0:
+                    cand0 = candidates[0]
+                    content = getattr(cand0, "content", None)
+                    if content is not None:
+                        parts = getattr(content, "parts", None)
+                        if parts and len(parts) > 0:
+                            raw = getattr(parts[0], "text", None) or str(parts[0])
+                        else:
+                            raw = str(content)
+            except Exception:
+                # fall through and let downstream handlers raise
+                raw = None
         if not raw:
             raise ValueError("No content from Gemini response.")
         try:
@@ -92,7 +109,7 @@ def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
         # Persist raw Gemini response and (best-effort) parsed JSON for debugging/artifacts
         try:
             os.makedirs("data/gemini", exist_ok=True)
-            ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+            ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             raw_path = f"data/gemini/gemini_{ts}.txt"
             parsed_path = f"data/gemini/gemini_{ts}.json"
             with open(raw_path, "w", encoding="utf-8") as f:

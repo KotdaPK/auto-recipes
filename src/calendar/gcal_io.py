@@ -55,7 +55,7 @@ def upsert_event(
         body["description"] = description_url
 
     # search for existing event by private extended property is not directly supported; naive scan recent events
-    now = datetime.datetime.utcnow().isoformat() + "Z"
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
     events = (
         service.events()
         .list(
