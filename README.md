@@ -48,6 +48,56 @@ python -m src.cli ingest https://example.com/recipe
 -- Configurable behavior: external integrations are optional and guarded so the core parsing and deduplication can run offline.
 -- Small, local-first design: deduplication and matching are performed locally (no external index). The `reindex-ingredients` command rebuilds the local embedding index from configured sources.
 
+Developer quick commands
+- Activate venv (PowerShell):
+
+```
+& C:/Users/prudh/auto-recipes/.venv/Scripts/Activate.ps1
+```
+
+- Install deps:
+
+```
+python -m pip install -r requirements.txt
+```
+
+- Start server (foreground, view logs in terminal):
+
+```
+python -m uvicorn src.main:app --reload --port 8000
+```
+
+- Stop a server listening on port 8000 (Windows):
+
+```
+netstat -ano | findstr :8000
+taskkill /PID <pid> /F
+```
+
+- Run ingest smoke test (end-to-end):
+
+```
+python scripts/test_ingest.py
+```
+
+- Run automated smoke-run (prints artifacts and probes /docs):
+
+```
+python scripts/smoke_run.py
+```
+
+- Run smoke-run for CI (machine-readable JSON output):
+
+```
+python scripts/smoke_run.py --ci
+```
+
+- Start uvicorn in background (PowerShell):
+
+```
+Start-Process -FilePath 'C:\Users\prudh\auto-recipes\.venv\Scripts\python.exe' -ArgumentList '-m','uvicorn','src.main:app','--port','8000' -PassThru
+```
+
 
 Design notes
 - The pipeline always uses page text — we never assume the site provides structured JSON-LD. This reduces false positives from inconsistent markup.

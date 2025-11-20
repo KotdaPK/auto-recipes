@@ -31,7 +31,8 @@ def url_to_recipe(url: str) -> dict:
     html, final = fetch_url(url)
     text = extract_main_text(html, final)
     try:
-        recipe = parse_recipe_text(text, final)
+        # pass raw html so the parser can extract JSON-LD and include it in the prompt
+        recipe = parse_recipe_text(text, final, html=html)
     except Exception as exc:  # fallback when LLM/config not present
         logger.debug("LLM parse failed (%s); using fallback stub recipe", exc)
 

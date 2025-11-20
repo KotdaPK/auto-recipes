@@ -26,7 +26,8 @@ try:
 	html, final = fetch_url(url)
 	text = extract_main_text(html, final)
 	try:
-		recipe = parse_recipe_text(text, final)
+		# pass full html so parse_recipe_text can extract JSON-LD and include it in the prompt
+		recipe = parse_recipe_text(text, final, html)
 		print(json.dumps(recipe.model_dump(), indent=2, ensure_ascii=False))
 	except Exception as e:
 		print("parse_recipe_text raised:", repr(e))

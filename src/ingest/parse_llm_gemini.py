@@ -22,7 +22,7 @@ except Exception:
     _HAS_JSONSCHEMA = False
 
 
-def _build_prompt(text: str, url: Optional[str], schema) -> str:
+def _build_prompt(text: str, url: Optional[str], schema, page_json_ld: Optional[str] = None) -> str:
     # Strongly require 'notes' to be filled where any preparation, parenthetical, or alternative text exists.
     # If none apply, explicitly set notes to an empty string "" in the JSON output.
     return "\n\n".join([
@@ -39,13 +39,15 @@ def _build_prompt(text: str, url: Optional[str], schema) -> str:
         "- Use an empty string \"\" for any text fields you cannot fill from the source and -1 for numeric fields you cannot fill from the source.",
         "Example ingredient JSON entries (illustrative, non-exhaustive):",
         '[{"raw":"1/2 cup dry white wine (or chicken broth)", "name":"dry white wine", "quantity":0.5, "unit":"cup", "notes":"or chicken broth"}]',
-        # "PAGE_TEXT:",
-        # text[:120000],
+    # "PAGE_TEXT:",
+    # text[:120000],
+    # If available, include the page's JSON-LD Recipe object to help parsing.
+    (f"PAGE_JSON_LD: {page_json_ld}" if page_json_ld else ""),
         "OUTPUT JSON SCHEMA:",
         json.dumps(schema, ensure_ascii=False, indent=2),
     ])
 
-def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
+def parse_recipe_text(text: str, url: Optional[str] = None, html: Optional[str] = None) -> RecipePayload:
     """Parse text using Gemini 2.5 structured output."""
     if not settings.GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY not configured.")
@@ -61,7 +63,68 @@ def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
 
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-    prompt = _build_prompt(text, url, RECIPE_RESPONSE_SCHEMA)
+    # Try to extract a Recipe JSON-LD block from the provided HTML (if any)
+    page_json_ld = None
+    page_json_ld_obj = None
+    try:
+        if html:
+            import re
+
+            def _extract_json_ld_blocks(html_text: str):
+                blocks = []
+                for m in re.finditer(r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html_text, flags=re.S | re.I):
+                    body = m.group(1).strip()
+                    if not body:
+                        continue
+                    try:
+                        parsed = json.loads(body)
+                        if isinstance(parsed, list):
+                            blocks.extend(parsed)
+                        else:
+                            blocks.append(parsed)
+                    except Exception:
+                        # try to recover common non-JSON wrappers
+                        try:
+                            # sometimes pages include multiple JSON objects concatenated; try to find first {..}
+                            s = body
+                            start = s.find('{')
+                            end = s.rfind('}')
+                            if start != -1 and end != -1:
+                                parsed = json.loads(s[start:end+1])
+                                blocks.append(parsed)
+                        except Exception:
+                            continue
+                return blocks
+
+            def _find_recipe_object(blocks):
+                for obj in blocks:
+                    if not isinstance(obj, dict):
+                        continue
+                    t = obj.get('@type') or obj.get('type')
+                    if isinstance(t, list) and 'Recipe' in t:
+                        return obj
+                    if isinstance(t, str) and t.lower() == 'recipe':
+                        return obj
+                    # some sites nest recipe under other properties
+                    for v in obj.values():
+                        if isinstance(v, dict):
+                            vt = v.get('@type') or v.get('type')
+                            if (isinstance(vt, str) and vt.lower() == 'recipe') or (isinstance(vt, list) and 'Recipe' in vt):
+                                return v
+                return None
+
+            blocks = _extract_json_ld_blocks(html)
+            recipe_obj = _find_recipe_object(blocks)
+            if recipe_obj is not None:
+                # keep both the dict and a truncated JSON string for the prompt
+                page_json_ld_obj = recipe_obj
+                page_json_ld = json.dumps(recipe_obj, ensure_ascii=False)
+                if len(page_json_ld) > 20000:
+                    page_json_ld = page_json_ld[:20000] + '...'
+    except Exception:
+        logger.debug('Failed to extract JSON-LD from html; continuing')
+
+    prompt = _build_prompt(text, url, RECIPE_RESPONSE_SCHEMA, page_json_ld)
     url_tool = types.Tool(url_context=types.UrlContext())
 
     for attempt in range(2):
@@ -158,8 +221,77 @@ def parse_recipe_text(text: str, url: Optional[str] = None) -> RecipePayload:
             else:
                 logger.debug("jsonschema not installed; skipping strict schema validation")
 
+        def _parse_iso8601_minutes(duration: Optional[str]) -> Optional[float]:
+            if not duration or not isinstance(duration, str):
+                return None
+            # Very small ISO8601 PT parser (supports H, M, S)
+            import re
+
+            m = re.match(r"^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$", duration.strip(), flags=re.I)
+            if not m:
+                return None
+            hours = int(m.group(1) or 0)
+            minutes = int(m.group(2) or 0)
+            seconds = int(m.group(3) or 0)
+            total = hours * 60 + minutes + (1 if seconds >= 30 else 0)
+            return float(total)
+
         try:
             recipe = RecipePayload.model_validate(data)
+            # If Gemini returned top-level prep_min/cook_min/total_min, merge them into the model
+            try:
+                if isinstance(data, dict):
+                    if getattr(recipe, 'time', None) is None:
+                        recipe.time = type(recipe.time)()
+                    for key, attr in (('prep_min', 'prep_min'), ('cook_min', 'cook_min'), ('total_min', 'total_min')):
+                        if getattr(recipe.time, attr, None) is None and key in data and isinstance(data[key], (int, float)):
+                            setattr(recipe.time, attr, float(data[key]))
+                    # if total still missing but prep and cook present, sum them
+                    try:
+                        if (getattr(recipe.time, 'total_min', None) is None) and (getattr(recipe.time, 'prep_min', None) is not None) and (getattr(recipe.time, 'cook_min', None) is not None):
+                            recipe.time.total_min = float(recipe.time.prep_min) + float(recipe.time.cook_min)
+                    except Exception:
+                        pass
+            except Exception:
+                logger.debug('Failed to merge top-level time keys from Gemini output')
+
+            # If the page provided JSON-LD recipe object, merge missing time/servings from it
+            try:
+                if page_json_ld_obj is not None:
+                    # extract times
+                    prep = _parse_iso8601_minutes(page_json_ld_obj.get('prepTime'))
+                    cook = _parse_iso8601_minutes(page_json_ld_obj.get('cookTime'))
+                    total = _parse_iso8601_minutes(page_json_ld_obj.get('totalTime'))
+                    if recipe.time is None:
+                        recipe.time = type(recipe.time)()
+                    if (recipe.time.prep_min is None or recipe.time.prep_min == None) and prep is not None:
+                        recipe.time.prep_min = prep
+                    if (recipe.time.cook_min is None or recipe.time.cook_min == None) and cook is not None:
+                        recipe.time.cook_min = cook
+                    if (recipe.time.total_min is None or recipe.time.total_min == None) and total is not None:
+                        recipe.time.total_min = total
+                    # if total still missing but prep and cook present, sum them
+                    if (recipe.time.total_min is None or recipe.time.total_min == None) and (recipe.time.prep_min is not None) and (recipe.time.cook_min is not None):
+                        try:
+                            recipe.time.total_min = float(recipe.time.prep_min) + float(recipe.time.cook_min)
+                        except Exception:
+                            pass
+                    # try to parse servings/recipeYield
+                    if (recipe.servings is None) and page_json_ld_obj.get('recipeYield'):
+                        ry = page_json_ld_obj.get('recipeYield')
+                        try:
+                            # if numeric
+                            if isinstance(ry, (int, float)):
+                                recipe.servings = float(ry)
+                            elif isinstance(ry, str):
+                                import re
+                                m = re.search(r"([0-9]+(?:\.[0-9]+)?)", ry)
+                                if m:
+                                    recipe.servings = float(m.group(1))
+                        except Exception:
+                            pass
+            except Exception:
+                logger.debug('Failed to merge JSON-LD times/servings; continuing')
             if url and not recipe.source_url:
                 recipe.source_url = url
             logger.info("Parsed recipe: %s", recipe.title)
