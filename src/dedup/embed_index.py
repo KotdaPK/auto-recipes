@@ -21,18 +21,20 @@ class EmbedIndex:
         self.names: List[str] = []
         self.vecs: np.ndarray | None = None
 
+    def _encode_and_normalize(self, texts: List[str]) -> np.ndarray:
+        raw = self.model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
+        raw = np.atleast_2d(raw)
+        norms = np.linalg.norm(raw, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        return raw / norms
+
     def build(self, names: List[str]) -> None:
         """Build the index from a list of names (strings). Vectors are L2-normalized."""
         self.names = names[:]
-        raw = self.model.encode(
-            self.names, show_progress_bar=False, convert_to_numpy=True
-        )
-        # ensure 2D (sentence-transformers may return 1D for a single input)
-        raw = np.atleast_2d(raw)
-        # normalize per-row
-        norms = np.linalg.norm(raw, axis=1, keepdims=True)
-        norms[norms == 0] = 1.0
-        self.vecs = raw / norms
+        if not self.names:
+            self.vecs = None
+            return
+        self.vecs = self._encode_and_normalize(self.names)
         logger.info("EmbedIndex built for %d names using model %s", len(self.names), self.model_name)
 
     def save(self, path_base: str) -> None:
@@ -52,6 +54,18 @@ class EmbedIndex:
             self.names = json.load(fh)
         self.vecs = np.load(vecs_path)
         logger.info("EmbedIndex loaded from %s", path_base)
+
+    def add_name(self, name: str) -> None:
+        """Append a new canonical name and its embedding to the index."""
+        if not name:
+            return
+        new_vec = self._encode_and_normalize([name])
+        if self.vecs is None or self.vecs.size == 0:
+            self.vecs = new_vec
+        else:
+            self.vecs = np.vstack([self.vecs, new_vec])
+        self.names.append(name)
+        logger.debug("EmbedIndex appended name '%s' (total=%d)", name, len(self.names))
 
     def nearest(self, query: str, topk: int = 1) -> Tuple[str, float]:
         """Return (name, score) for nearest neighbor using dot on normalized vectors.

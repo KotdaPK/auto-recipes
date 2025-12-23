@@ -2,7 +2,12 @@ from typing import Optional, List, Dict, Any
 import sqlite3
 import os
 import json
-from datetime import datetime
+from datetime import datetime, UTC
+from contextlib import asynccontextmanager
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from fastapi import FastAPI, Header, HTTPException, Depends
 from pydantic import BaseModel
@@ -120,7 +125,13 @@ class SyncPushRequest(BaseModel):
     last_seen_server_version: Optional[int] = 0
 
 
-app = FastAPI(title="Auto-Recipes Server (minimal)")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    ensure_db()
+    yield
+
+
+app = FastAPI(title="Auto-Recipes Server (minimal)", lifespan=lifespan)
 
 
 def lookup_density(conn: sqlite3.Connection, user_id: str, ingredient_name: str) -> Optional[float]:
@@ -200,11 +211,7 @@ def lookup_or_create_ingredient(conn: sqlite3.Connection, user_id: str, name: st
 
 
 def upsert_parsed_recipe(parsed: Dict[str, Any], user_id: str, source_url: Optional[str] = None) -> int:
-    """Normalize parsed recipe dict into recipes, ingredients and recipe_ingredients.
-
-    parsed is expected to follow src.models.recipe_schema.RecipePayload structure (title, servings, ingredients, steps).
-    Returns the created recipe_id.
-    """
+    """Normalize parsed recipe dict into recipes, ingredients and recipe_ingredients."""
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
@@ -212,16 +219,51 @@ def upsert_parsed_recipe(parsed: Dict[str, Any], user_id: str, source_url: Optio
     servings = parsed.get("servings")
     steps = parsed.get("steps") or []
 
-    cur.execute(
-        "INSERT INTO recipes (user_id, title, source_url, servings, steps_json) VALUES (?,?,?,?,?)",
-        (user_id, title, source_url, servings, json.dumps(steps)),
-    )
-    recipe_id = cur.lastrowid
+    recipe_id: Optional[int] = None
+    recipe_version = 1
+    recipe_op = "create"
+    now_iso = datetime.now(UTC).isoformat()
+
+    if source_url:
+        cur.execute(
+            "SELECT id, version FROM recipes WHERE user_id = ? AND source_url = ? ORDER BY id DESC LIMIT 1",
+            (user_id, source_url),
+        )
+        row = cur.fetchone()
+        if row:
+            recipe_id = row[0]
+            recipe_version = (row[1] or 1) + 1
+            recipe_op = "update"
+
+    if recipe_id is None:
+        cur.execute(
+            "INSERT INTO recipes (user_id, title, source_url, servings, steps_json) VALUES (?,?,?,?,?)",
+            (user_id, title, source_url, servings, json.dumps(steps)),
+        )
+        recipe_id = cur.lastrowid
+    else:
+        # Replace the existing recipe body with the latest parse.
+        cur.execute(
+            "UPDATE recipes SET title = ?, source_url = ?, servings = ?, steps_json = ?, updated_at = ?, version = ? WHERE id = ?",
+            (title, source_url, servings, json.dumps(steps), now_iso, recipe_version, recipe_id),
+        )
+
+        cur.execute(
+            "SELECT id FROM recipe_ingredients WHERE recipe_id = ? AND user_id = ?",
+            (recipe_id, user_id),
+        )
+        stale_ingredients = [row[0] for row in cur.fetchall()]
+        for ri_id in stale_ingredients:
+            cur.execute(
+                "INSERT INTO changes_log (user_id, entity, entity_id, op, version, payload) VALUES (?,?,?,?,?,?)",
+                (user_id, "recipe_ingredient", ri_id, "delete", 1, json.dumps({"recipe_id": recipe_id})),
+            )
+        cur.execute("DELETE FROM recipe_ingredients WHERE recipe_id = ? AND user_id = ?", (recipe_id, user_id))
 
     # insert recipe change log
     cur.execute(
         "INSERT INTO changes_log (user_id, entity, entity_id, op, version, payload) VALUES (?,?,?,?,?,?)",
-        (user_id, "recipe", recipe_id, "create", 1, json.dumps(parsed)),
+        (user_id, "recipe", recipe_id, recipe_op, recipe_version, json.dumps(parsed)),
     )
 
     # process ingredients
@@ -277,11 +319,6 @@ def get_current_user(authorization: Optional[str] = Header(None), x_user: Option
         # lightweight uid extraction for dev
         return {"uid": token[-16:]}
     raise HTTPException(status_code=401, detail="Missing auth; set X-User header for local dev")
-
-
-@app.on_event("startup")
-def startup():
-    ensure_db()
 
 
 @app.post("/ingest/recipe")

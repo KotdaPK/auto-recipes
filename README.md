@@ -98,6 +98,33 @@ python scripts/smoke_run.py --ci
 Start-Process -FilePath 'C:\Users\prudh\auto-recipes\.venv\Scripts\python.exe' -ArgumentList '-m','uvicorn','src.main:app','--port','8000' -PassThru
 ```
 
+## Server endpoints
+
+All routes require either `X-User` (local dev) or `Authorization` headers to resolve a user id.
+
+- **POST `/ingest/recipe`** — Body: `{ "url": "https://example.com" }` (or `html`). Runs the full pipeline (fetch → parse → dedupe → persist) and returns `{ "recipe_id": int, "server_version": int }`.
+- PowerShell:
+	```powershell
+	$body = @{ url = "https://downshiftology.com/recipes/chicken-piccata/" }
+	Invoke-RestMethod -Uri "http://127.0.0.1:8000/ingest/recipe" -Method Post -Headers @{"X-User"="devuser"} -ContentType "application/json" -Body ($body | ConvertTo-Json -Depth 4)
+	```
+- **POST `/sync/push`** — Body: `{ "outbox": [ { "op": "create", "entity": "recipe", ... } ], "last_seen_server_version": int }`. Applies client mutations (recipes or other entities) and echoes the applied operations plus the latest server version.
+- PowerShell:
+	```powershell
+	$outbox = @{ outbox = @(@{ op = "create"; entity = "recipe"; payload = @{ title = "Local draft"; servings = 2 } }) ; last_seen_server_version = 0 }
+	Invoke-RestMethod -Uri "http://127.0.0.1:8000/sync/push" -Method Post -Headers @{"X-User"="devuser"} -ContentType "application/json" -Body ($outbox | ConvertTo-Json -Depth 6)
+	```
+- **GET `/sync/pull?since=<int>`** — Streams change-log rows newer than `since` for the requesting user, returning `{ "changes": [...], "server_version": int }` so clients can stay in sync.
+- PowerShell:
+	```powershell
+	Invoke-RestMethod -Uri "http://127.0.0.1:8000/sync/pull?since=0" -Headers @{"X-User"="devuser"}
+	```
+- **GET `/grocery/weekly?week=<YYYY-MM-DD>`** — Placeholder endpoint that currently returns an empty grocery list structure for the requested week; intended for future rollups.
+- PowerShell:
+	```powershell
+	Invoke-RestMethod -Uri "http://127.0.0.1:8000/grocery/weekly?week=2025-11-23" -Headers @{"X-User"="devuser"}
+	```
+
 
 Design notes
 - The pipeline always uses page text — we never assume the site provides structured JSON-LD. This reduces false positives from inconsistent markup.

@@ -22,6 +22,105 @@ except Exception:
     _HAS_JSONSCHEMA = False
 
 
+def _strip_markdown_fence(raw: str) -> str:
+    if not raw:
+        return raw
+    stripped = raw.strip()
+    if stripped.startswith("```"):
+        content = stripped[3:]
+    else:
+        fence_start = stripped.find("```")
+        if fence_start == -1:
+            return raw
+        content = stripped[fence_start + 3 :]
+    content = content.lstrip()
+    if content.lower().startswith("json"):
+        content = content[4:]
+    content = content.lstrip()
+    closing = content.rfind("```")
+    if closing != -1:
+        content = content[:closing]
+    return content.strip() or raw
+
+
+def _extract_json_fragment(raw: str) -> str | None:
+    start = None
+    depth = 0
+    in_string = False
+    escape = False
+    best: tuple[int, int] | None = None
+    for idx, ch in enumerate(raw):
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            if depth == 0:
+                start = idx
+            depth += 1
+        elif ch == "}":
+            if depth:
+                depth -= 1
+                if depth == 0 and start is not None:
+                    if best is None or (idx - start) > (best[1] - best[0]):
+                        best = (start, idx + 1)
+    if best is None:
+        return None
+    return raw[best[0] : best[1]]
+
+
+def _parse_candidate_json(raw: str) -> dict | None:
+    candidates: list[str] = []
+
+    def _add(value: str | None) -> None:
+        if not value:
+            return
+        if value not in candidates:
+            candidates.append(value)
+
+    stripped = raw.strip()
+    fenced = _strip_markdown_fence(raw)
+    _add(fenced)
+    _add(stripped)
+    fragment = _extract_json_fragment(raw)
+    _add(fragment)
+
+    for candidate in candidates:
+        try:
+            return json.loads(candidate)
+        except Exception:
+            continue
+    return None
+
+
+def _extract_response_text(resp) -> str | None:
+    for attr in ("text", "output_text"):
+        raw = getattr(resp, attr, None)
+        if raw:
+            return raw
+    candidates = getattr(resp, "candidates", None) or []
+    for cand in candidates:
+        content = getattr(cand, "content", None)
+        if content is None:
+            continue
+        parts = getattr(content, "parts", None) or []
+        for part in parts:
+            text_value = getattr(part, "text", None)
+            if text_value:
+                return text_value
+            if isinstance(part, str):
+                return part
+            # some SDK parts expose .inline_data -> skip for now
+    return None
+
+
 def _build_prompt(text: str, url: Optional[str], schema, page_json_ld: Optional[str] = None) -> str:
     # Strongly require 'notes' to be filled where any preparation, parenthetical, or alternative text exists.
     # If none apply, explicitly set notes to an empty string "" in the JSON output.
@@ -140,34 +239,13 @@ def parse_recipe_text(text: str, url: Optional[str] = None, html: Optional[str] 
         )
 
 
-        raw = getattr(resp, "text", None) or getattr(resp, "output_text", None)
-        # Some SDK responses place content in `candidates[0].content.parts[0].text`.
-        if not raw:
-            try:
-                candidates = getattr(resp, "candidates", None)
-                if candidates and len(candidates) > 0:
-                    cand0 = candidates[0]
-                    content = getattr(cand0, "content", None)
-                    if content is not None:
-                        parts = getattr(content, "parts", None)
-                        if parts and len(parts) > 0:
-                            raw = getattr(parts[0], "text", None) or str(parts[0])
-                        else:
-                            raw = str(content)
-            except Exception:
-                # fall through and let downstream handlers raise
-                raw = None
+        raw = _extract_response_text(resp)
         if not raw:
             raise ValueError("No content from Gemini response.")
-        try:
-            # Gemini still emits JSON text — you just have to parse it yourself
-            data = json.loads(raw)
-        except Exception as e:
-            start, end = raw.find("{"), raw.rfind("}")
-            if start != -1 and end != -1:
-                data = json.loads(raw[start:end + 1])
-            else:
-                raise ValueError("Failed to parse JSON.") from e
+        data = _parse_candidate_json(raw)
+        if data is None:
+            logger.error("Gemini output missing JSON block. Snippet: %s", raw[:200])
+            raise ValueError("Failed to parse JSON.")
 
         # Persist raw Gemini response and (best-effort) parsed JSON for debugging/artifacts
         try:
@@ -197,19 +275,7 @@ def parse_recipe_text(text: str, url: Optional[str] = None, html: Optional[str] 
         # data = getattr(resp, "parsed", None)
 
         if data is None:
-            # fallback: manual JSON parse
-            raw = getattr(resp, "text", None) or getattr(resp, "output_text", None)
-            if not raw:
-                raise ValueError("No content from Gemini response.")
-            try:
-                data = json.loads(raw)
-            except Exception as e:
-                # strip junk outside braces
-                start, end = raw.find("{"), raw.rfind("}")
-                if start != -1 and end != -1:
-                    data = json.loads(raw[start:end + 1])
-                else:
-                    raise ValueError("Failed to parse JSON.") from e
+            raise ValueError("Failed to parse JSON.")
 
         # Quick schema alignment check (JSON Schema) and log a warning if it fails
         if data is not None:
